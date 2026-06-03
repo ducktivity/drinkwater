@@ -1,105 +1,65 @@
-import { createSignal } from 'solid-js'
-import solidLogo from './assets/solid.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { createSignal, onMount } from 'solid-js'
+import { db, type WaterLog } from './db/db'
 
 function App() {
-  const [count, setCount] = createSignal(0)
+  const [logs, setLogs] = createSignal<WaterLog[]>([])
+
+  // 1. Fetch data from Dexie when the component loads
+  const loadLogs = async () => {
+    // Dexie query: Get all logs that are not marked as deleted, sorted by time
+    const allLogs = await db.waterLogs
+      .filter((log) => !log.is_deleted)
+      .reverse()
+      .sortBy('logged_at')
+
+    setLogs(allLogs)
+  }
+
+  onMount(() => {
+    loadLogs()
+  })
+
+  // 2. Add a new water log
+  const handleDrinkWater = async () => {
+    const newLog: WaterLog = {
+      id: crypto.randomUUID(), // Generate a unique ID locally
+      amount_ml: 250, // Standard glass of water
+      logged_at: new Date().toISOString(),
+      is_deleted: false,
+    }
+
+    // Save to Dexie
+    await db.waterLogs.add(newLog)
+
+    // Refresh the UI
+    await loadLogs()
+  }
 
   return (
-    <>
-      <section id="center">
-        <div class="hero">
-          <img src={heroImg} class="base" width="170" height="179" alt="" />
-          <img src={solidLogo} class="framework" alt="Solid logo" />
-          <img src={viteLogo} class="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          class="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count()}
-        </button>
-      </section>
+    <div style={{ padding: '2rem', 'font-family': 'sans-serif' }}>
+      <h1>Drinkwater 💧</h1>
 
-      <div class="ticks"></div>
+      <button
+        onClick={handleDrinkWater}
+        style={{
+          padding: '10px 20px',
+          'font-size': '1.2rem',
+          cursor: 'pointer',
+        }}
+      >
+        Drink 250ml
+      </button>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg class="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img class="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://solidjs.com/" target="_blank">
-                <img class="button-icon" src={solidLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg class="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div class="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <h2 style={{ 'margin-top': '2rem' }}>Today's Logs</h2>
+      <ul>
+        {logs().map((log) => (
+          <li>
+            <strong>{log.amount_ml}ml</strong> -{' '}
+            {new Date(log.logged_at).toLocaleTimeString()}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
