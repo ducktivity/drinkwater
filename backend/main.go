@@ -10,20 +10,56 @@ import (
 )
 
 func main() {
-	// Initialize the Echo v4 instance
+	// Initialize slog to output JSON to stdout (standard output)
+	// Coolify will automatically collect these JSON logs
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo, // Set default logging level
+	}))
+	slog.SetDefault(logger)
+
 	e := echo.New()
 
-	// Use modern RequestLogger and crash-recovery middleware
-	e.Use(middleware.RequestLogger())
+	// Crash-recovery middleware
 	e.Use(middleware.Recover())
 
-	// A simple health-check route (Notice: c echo.Context, no pointer!)
+	// Configure Echo's built-in RequestLogger to pipe directly into our structured slog
+	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogStatus:   true,
+		LogURI:      true,
+		LogMethod:   true,
+		LogError:    true,
+		LogLatency:  true,
+		LogRemoteIP: true,
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			if v.Error != nil {
+				slog.Error("request failed",
+					"uri", v.URI,
+					"method", v.Method,
+					"status", v.Status,
+					"error", v.Error.Error(),
+					"latency", v.Latency,
+					"ip", v.RemoteIP,
+				)
+			} else {
+				slog.Info("request processed",
+					"uri", v.URI,
+					"method", v.Method,
+					"status", v.Status,
+					"latency", v.Latency,
+					"ip", v.RemoteIP,
+				)
+			}
+			return nil
+		},
+	}))
+
 	e.GET("/health", func(c echo.Context) error {
-		return c.String(http.StatusOK, "Drinkwater server is up and running!")
+		return c.String(http.StatusOK, "Drinkwater server is healthy")
 	})
 
 	// Start the server on port 8080
-	slog.Info("Starting Drinkwater server on http://localhost:8080")
+	slog.Info("Starting Drinkwater server",
+		"port", 8080)
 	if err := e.Start(":8080"); err != nil {
 		slog.Error("failed to start server", "error", err)
 		os.Exit(1)
