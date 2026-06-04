@@ -30,11 +30,11 @@ Make sure `DATABASE_URL` is in `backend/.env`
 - Use-case: After migration (up/down) or writing anything new into [sql/](sql/).
 - Output: [database/dbgen/](database/dbgen/)
 
-### Export OpenAPI schema
+### Export Swagger (OpenAPI 2) schema
 
 ```bash
-./scripts/export-openapi.sh
+./scripts/export-swaggerr.sh
 ```
 
 - Use-case: After making API changes and you need to refresh the schema.
-- Output: [../shared-schemas/openapi.json](../shared-schemas/openapi.json).
+- Output: [../shared-schemas/swagger.json](../shared-schemas/swagger.json).

@@ -6,7 +6,7 @@ echo "🔄 Generating OpenAPI schema using Swag..."
 go tool swag init --parseDependency --parseInternal
 
 echo "🚚 Moving swagger.json to shared-schemas as openapi.json..."
-mv docs/swagger.json ../shared-schemas/openapi.json
+mv docs/swagger.json ../shared-schemas/swagger.json
 
 echo "🧹 Cleaning up docs folder..."
 rm -rf docs/

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "generate-types": "openapi-typescript ../shared-schemas/openapi.yaml -o src/types/schema.d.ts",
+    "generate-types": "swagger2openapi ../shared-schemas/swagger.json -o ../shared-schemas/openapi.json && openapi-typescript ../shared-schemas/openapi.json -o src/types/schema.d.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -16,6 +16,7 @@
   "devDependencies": {
     "@types/node": "^24.12.3",
     "openapi-typescript": "^7.13.0",
+    "swagger2openapi": "^7.0.8",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
     "vite-plugin-solid": "^2.11.12"
