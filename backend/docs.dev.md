@@ -1,9 +1,26 @@
 ### Backend Development Documentation
 
-##### Generate OpenAPI schema in Go
+##### Run DB migration
 
 ```bash
-go tool oapi-codegen -generate types,server,skip-prune -package models ../shared-schemas/openapi.yaml > models/models.gen.go
+./scripts/db-migrate.sh up
 ```
 
-Output: models/models.gen.go
+Make sure `DATABASE_URL` is in `backend/.env`
+
+##### Generate type-safe SQL queries and models
+
+```bash
+./scripts/db-codegen.sh
+```
+
+Usage: After migration (up/down) or writing anything new into `sql/`.
+Output: database/dbgen/.
+
+##### Export OpenAPI schema
+
+```bash
+./scripts/export-openapi.sh
+```
+
+Output: shared-schemas/openapi.json.
