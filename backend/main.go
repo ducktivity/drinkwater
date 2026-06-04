@@ -5,19 +5,20 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/labstack/echo/v5"
-	"github.com/labstack/echo/v5/middleware"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 func main() {
+	// Initialize the Echo v4 instance
 	e := echo.New()
 
 	// Use modern RequestLogger and crash-recovery middleware
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 
-	// A simple health-check route (Notice the *echo.Context pointer)
-	e.GET("/health", func(c *echo.Context) error {
+	// A simple health-check route (Notice: c echo.Context, no pointer!)
+	e.GET("/health", func(c echo.Context) error {
 		return c.String(http.StatusOK, "Drinkwater server is up and running!")
 	})
 
