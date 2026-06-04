@@ -1,15 +1,25 @@
 package main
 
 import (
+	"drinkwater-backend/database"
 	"log/slog"
 	"net/http"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		// We use slog.Warn because in production (Coolify), there is no .env file
+		// The environment variables are injected directly by the OS.
+		slog.Warn("No .env file found or error loading it, relying on system environment variables")
+	}
+
+	database.Connect()
+
 	// Initialize slog to output JSON to stdout (standard output)
 	// Coolify will automatically collect these JSON logs
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
