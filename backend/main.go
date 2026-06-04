@@ -1,77 +1,58 @@
 package main
 
 import (
-	"drinkwater-backend/database"
 	"log/slog"
 	"net/http"
 	"os"
 
+	"drinkwater-backend/database"
+	"drinkwater-backend/handlers"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 )
 
+// @title Drinkwater Sync API
+// @version 1.0
+// @description Local-first sync engine.
+// @BasePath /
 func main() {
-	if err := godotenv.Load(); err != nil {
-		// We use slog.Warn because in production (Coolify), there is no .env file
-		// The environment variables are injected directly by the OS.
-		slog.Warn("No .env file found or error loading it, relying on system environment variables")
-	}
-
-	database.Connect()
-
-	// Initialize slog to output JSON to stdout (standard output)
-	// Coolify will automatically collect these JSON logs
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo, // Set default logging level
+		Level: slog.LevelInfo,
 	}))
 	slog.SetDefault(logger)
 
-	e := echo.New()
+	godotenv.Load()
+	database.Connect()
 
-	// Crash-recovery middleware
-	e.Use(middleware.Recover())
+	// Initialize Chi router
+	router := chi.NewRouter()
 
-	// Configure Echo's built-in RequestLogger to pipe directly into our structured slog
-	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-		LogStatus:   true,
-		LogURI:      true,
-		LogMethod:   true,
-		LogError:    true,
-		LogLatency:  true,
-		LogRemoteIP: true,
-		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
-			if v.Error != nil {
-				slog.Error("request failed",
-					"uri", v.URI,
-					"method", v.Method,
-					"status", v.Status,
-					"error", v.Error.Error(),
-					"latency", v.Latency,
-					"ip", v.RemoteIP,
-				)
-			} else {
-				slog.Info("request processed",
-					"uri", v.URI,
-					"method", v.Method,
-					"status", v.Status,
-					"latency", v.Latency,
-					"ip", v.RemoteIP,
-				)
-			}
-			return nil
-		},
+	// Add standard standard middleware
+	router.Use(middleware.RequestID)
+	router.Use(middleware.RealIP)
+	router.Use(middleware.Logger)
+	router.Use(middleware.Recoverer)
+
+	// Configure CORS for SolidJS and Tauri
+	router.Use(cors.Handler(cors.Options{
+		AllowedOrigins: []string{"http://localhost:5173", "tauri://localhost"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}))
 
-	e.GET("/health", func(c echo.Context) error {
-		return c.String(http.StatusOK, "Drinkwater server is healthy")
+	// Routes
+	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Drinkwater Chi server is healthy"))
 	})
 
-	// Start the server on port 8080
-	slog.Info("Starting Drinkwater server",
-		"port", 8080)
-	if err := e.Start(":8080"); err != nil {
-		slog.Error("failed to start server", "error", err)
+	router.Post("/sync", handlers.PostSync)
+
+	slog.Info("Starting Drinkwater server", "port", 8080)
+	if err := http.ListenAndServe(":8080", router); err != nil {
+		slog.Error("server startup failed", "error", err)
 		os.Exit(1)
 	}
 }
