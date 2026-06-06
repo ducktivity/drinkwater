@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import { type components } from '../types/schema'
+import { type components } from '../types/schema.d'
 
 // Extract the core types from our OpenAPI schema
 export type WaterLog = components['schemas']['api.WaterLog']
