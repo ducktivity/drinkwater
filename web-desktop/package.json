@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "dexie": "^4.4.3",
+    "openapi-fetch": "^0.17.0",
     "solid-js": "^1.9.12"
   },
   "devDependencies": {
