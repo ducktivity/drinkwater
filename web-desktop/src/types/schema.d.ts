@@ -78,13 +78,13 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         "api.SyncResponse": {
-            changes?: components["schemas"]["api.WaterLog"][];
-            server_time?: string;
+            changes: components["schemas"]["api.WaterLog"][];
+            server_time: string;
         };
         "api.WaterLog": {
             amount_ml: number;
             id: string;
-            is_deleted?: boolean;
+            is_deleted: boolean;
             logged_at: string;
         };
     };

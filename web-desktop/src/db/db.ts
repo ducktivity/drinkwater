@@ -1,25 +1,41 @@
 import Dexie, { type Table } from 'dexie'
-import type { components } from '../types/schema'
+import { type components } from '../types/schema'
 
-// Extract the WaterLog type from our OpenAPI generated types
-export type WaterLog = components['schemas']['WaterLog']
+// Extract the core types from our OpenAPI schema
+export type WaterLog = components['schemas']['api.WaterLog']
+
+// Create an extended interface for our LOCAL database.
+// It includes everything from the server's WaterLog, plus a local 'is_synced' flag.
+export interface LocalWaterLog extends WaterLog {
+  is_synced: number // 0 = false (needs sync), 1 = true (already on server)
+}
 
 export class DrinkwaterDB extends Dexie {
-  // Declare our table and tell TypeScript it holds WaterLog objects,
-  // and the primary key is a string ('id')
-  waterLogs!: Table<WaterLog, string>
+  waterLogs!: Table<LocalWaterLog, string>
 
   constructor() {
     super('DrinkwaterDB')
 
-    // Define the database schema.
-    // We only need to define the properties we want to query or filter by.
-    // We use '&id' to denote that 'id' is a unique primary key.
+    // Version 1 (Old)
     this.version(1).stores({
       waterLogs: '&id, amount_ml, logged_at, is_deleted',
     })
+
+    // Version 2 (New): We added is_synced to our indexes so we can query it quickly
+    this.version(2)
+      .stores({
+        waterLogs: '&id, amount_ml, logged_at, is_deleted, is_synced',
+      })
+      .upgrade((tx) => {
+        // If a user upgrades from v1, mark all existing logs as needing a sync
+        return tx
+          .table('waterLogs')
+          .toCollection()
+          .modify((log) => {
+            log.is_synced = 0
+          })
+      })
   }
 }
 
-// Export a single instance to be used throughout the app
 export const db = new DrinkwaterDB()

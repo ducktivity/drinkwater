@@ -73,6 +73,10 @@
     "definitions": {
         "api.SyncResponse": {
             "type": "object",
+            "required": [
+                "changes",
+                "server_time"
+            ],
             "properties": {
                 "changes": {
                     "type": "array",
@@ -90,6 +94,7 @@
             "required": [
                 "amount_ml",
                 "id",
+                "is_deleted",
                 "logged_at"
             ],
             "properties": {
