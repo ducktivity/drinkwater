@@ -41,6 +41,8 @@ interface Props {
   onFillFractionChange: (newFillFraction: number) => void
   /** Called when the user releases the drag at or below the empty threshold. */
   onBottleEmptied: () => void
+  /** Called when the user releases a drag above the empty threshold, to commit the resting level. */
+  onDragSettled: () => void
 }
 
 export function BottleSection(props: Props) {
@@ -77,8 +79,13 @@ export function BottleSection(props: Props) {
   function handleDragEnd(clientY: number) {
     if (!isDragging) return
     isDragging = false
-    // Trigger the "bottle emptied" flow when the user releases near the bottom
-    if (pointerClientYToFillFraction(clientY) <= 0.05) props.onBottleEmptied()
+    // Trigger the "bottle emptied" flow when the user releases near the bottom,
+    // otherwise commit the resting level so it can fold into today's total.
+    if (pointerClientYToFillFraction(clientY) <= 0.05) {
+      props.onBottleEmptied()
+    } else {
+      props.onDragSettled()
+    }
   }
 
   onMount(() => {

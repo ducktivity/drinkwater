@@ -22,16 +22,15 @@ interface HydrationUIState {
   goal: number
   /** Current fill fraction of the active bottle (0 = empty, 1 = full). */
   fillFraction: number
-  /** Number of full bottles completed today. */
-  completedBottleCount: number
   /** The date this state belongs to, as a YYYY-MM-DD key. */
   date: string
 }
 
 /**
  * Reads persisted state from localStorage.
- * If the stored date differs from today, resets the daily progress
- * (completedBottleCount and fillFraction) while keeping user settings (size, goal).
+ * If the stored date differs from today, resets the active bottle's fill level
+ * while keeping user settings (size, goal). Note that the amount drunk today is
+ * derived from the IndexedDB logs, not from this UI state.
  */
 function loadPersistedState(): HydrationUIState {
   try {
@@ -39,12 +38,11 @@ function loadPersistedState(): HydrationUIState {
     if (serialized) {
       const parsed = JSON.parse(serialized) as HydrationUIState
       const today = getTodayKey()
-      // New day — carry forward settings but reset today's progress
+      // New day — carry forward settings but reset the active bottle to full
       if (parsed.date !== today) {
         return {
           ...parsed,
           fillFraction: 1,
-          completedBottleCount: 0,
           date: today,
         }
       }
@@ -57,7 +55,6 @@ function loadPersistedState(): HydrationUIState {
     size: 1000,
     goal: 2000,
     fillFraction: 1,
-    completedBottleCount: 0,
     date: getTodayKey(),
   }
 }
@@ -73,8 +70,11 @@ export default function App() {
   const [fillFraction, setFillFraction] = createSignal(
     initialState.fillFraction,
   )
-  const [completedBottleCount, setCompletedBottleCount] = createSignal(
-    initialState.completedBottleCount,
+  // The active bottle's level as of the last settled interaction (drag release,
+  // log, or cancel). Kept separate from fillFraction so the daily total folds in
+  // the in-progress bottle only when dragging stops, not on every drag frame.
+  const [settledFillFraction, setSettledFillFraction] = createSignal(
+    initialState.fillFraction,
   )
 
   // UI overlay state
@@ -97,21 +97,10 @@ export default function App() {
         size: bottleSize(),
         goal: dailyGoal(),
         fillFraction: fillFraction(),
-        completedBottleCount: completedBottleCount(),
         date: getTodayKey(),
       }),
     )
   }
-
-  /**
-   * Total millilitres consumed today: all completed bottles plus whatever
-   * was already drunk from the active (partially-empty) bottle.
-   */
-  const totalMlConsumedToday = () =>
-    Math.round(
-      completedBottleCount() * bottleSize() +
-        (1 - fillFraction()) * bottleSize(),
-    )
 
   /**
    * Today's individual water log entries, most recent first.
@@ -123,14 +112,39 @@ export default function App() {
       .sort((a, b) => b.logged_at.localeCompare(a.logged_at))
   })
 
+  /**
+   * Total millilitres consumed today: the sum of the live IndexedDB logs (so it
+   * always reflects added, edited, and deleted entries) plus whatever has been
+   * drunk from the active bottle since it was last settled. The active-bottle
+   * portion uses settledFillFraction, so dragging the bottle only moves this
+   * figure once the drag stops — not on every frame.
+   */
+  const totalMlConsumedToday = createMemo(() => {
+    const loggedTotal = todayLogs().reduce((sum, log) => sum + log.amount_ml, 0)
+    const activeBottleConsumed = Math.round(
+      (1 - settledFillFraction()) * bottleSize(),
+    )
+    return loggedTotal + activeBottleConsumed
+  })
+
+  /** Live drag updates: move the bottle visual only, without touching the daily total. */
   function handleFillFractionChange(newFillFraction: number) {
     setFillFraction(newFillFraction)
+  }
+
+  /**
+   * Called when a drag ends above the empty threshold. Commits the resting level
+   * so the partially-drunk active bottle folds into today's total, and persists it.
+   */
+  function handleDragSettled() {
+    setSettledFillFraction(fillFraction())
     persistState()
   }
 
   /** Called when the user drags the bottle to empty — triggers the confirm dialog. */
   function handleBottleEmptied() {
     setFillFraction(0)
+    setSettledFillFraction(0)
     persistState()
     setIsConfirmVisible(true)
   }
@@ -144,8 +158,10 @@ export default function App() {
       is_deleted: false,
       is_synced: 0,
     })
-    setCompletedBottleCount(completedBottleCount() + 1)
     setFillFraction(1)
+    // The bottle is now logged and full again, so it no longer contributes to
+    // the active-bottle portion of the daily total (it counts via the log above).
+    setSettledFillFraction(1)
     setIsConfirmVisible(false)
     persistState()
     syncEngine().catch(console.error)
@@ -194,6 +210,7 @@ export default function App() {
   /** Dismisses the confirm dialog and restores a near-empty bottle so the user can try again. */
   function handleLogCancel() {
     setFillFraction(0.05)
+    setSettledFillFraction(0.05)
     setIsConfirmVisible(false)
     persistState()
   }
@@ -231,18 +248,14 @@ export default function App() {
       </header>
 
       <div class="w-full max-w-105 bg-[#1a1d26] border border-white/8 rounded-2xl pt-7 px-6 pb-6 flex flex-col items-center gap-6">
-        <StatsRow
-          totalMl={totalMlConsumedToday}
-          completedBottleCount={completedBottleCount}
-          fillFraction={fillFraction}
-          goal={dailyGoal}
-        />
+        <StatsRow totalMl={totalMlConsumedToday} goal={dailyGoal} />
 
         <BottleSection
           size={bottleSize}
           fillFraction={fillFraction}
           onFillFractionChange={handleFillFractionChange}
           onBottleEmptied={handleBottleEmptied}
+          onDragSettled={handleDragSettled}
         />
 
         <div class="w-full h-px bg-white/8" />
