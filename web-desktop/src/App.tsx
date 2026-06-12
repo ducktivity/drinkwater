@@ -6,7 +6,7 @@ import { getTodayKey } from './utils'
 import { StatsRow } from './components/StatsRow'
 import { BottleSection } from './components/BottleSection'
 import { SettingsSection } from './components/SettingsSection'
-import { HistoryList } from './components/HistoryList'
+import { TodayLogList } from './components/TodayLogList'
 import { ConfirmOverlay } from './components/ConfirmOverlay'
 
 /** localStorage key used to persist UI state between sessions. */
@@ -98,22 +98,13 @@ export default function App() {
     )
 
   /**
-   * Aggregated daily totals for the past 14 days (excluding today).
-   * Returned as a date-descending array of [YYYY-MM-DD, totalMl] pairs.
+   * Today's individual water log entries, most recent first.
    */
-  const pastDailyHistory = createMemo(() => {
+  const todayLogs = createMemo(() => {
     const today = getTodayKey()
-    const dailyTotals = new Map<string, number>()
-    for (const log of waterLogs()) {
-      const dateKey = log.logged_at.substring(0, 10)
-      // Exclude today — it is displayed live in the stats row
-      if (dateKey !== today) {
-        dailyTotals.set(dateKey, (dailyTotals.get(dateKey) ?? 0) + log.amount_ml)
-      }
-    }
-    return [...dailyTotals.entries()]
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .slice(0, 14)
+    return waterLogs()
+      .filter((log) => log.logged_at.substring(0, 10) === today)
+      .sort((a, b) => b.logged_at.localeCompare(a.logged_at))
   })
 
   function handleFillFractionChange(newFillFraction: number) {
@@ -194,7 +185,6 @@ export default function App() {
         <BottleSection
           size={bottleSize}
           fillFraction={fillFraction}
-          completedBottleCount={completedBottleCount}
           onFillFractionChange={handleFillFractionChange}
           onBottleEmptied={handleBottleEmptied}
         />
@@ -215,7 +205,7 @@ export default function App() {
         />
       </div>
 
-      <HistoryList history={pastDailyHistory} />
+      <TodayLogList logs={todayLogs} />
 
       <Show when={isConfirmVisible()}>
         <ConfirmOverlay

@@ -13,6 +13,14 @@ export function formatDay(dateKey: string) {
   })
 }
 
+/** Formats an ISO timestamp into a human-readable local time (e.g. "14:30"). */
+export function formatTime(isoTimestamp: string) {
+  return new Date(isoTimestamp).toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 /** Formats a millilitre value — displays as litres when ≥ 1000 ml (e.g. "1.5 L"), otherwise as "750 ml". */
 export function formatMl(milliliters: number) {
   return milliliters >= 1000

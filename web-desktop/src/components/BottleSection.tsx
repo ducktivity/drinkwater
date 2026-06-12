@@ -1,4 +1,4 @@
-import { For, Show, onMount, onCleanup } from 'solid-js'
+import { Show, onMount, onCleanup } from 'solid-js'
 import { clamp } from '../utils'
 
 // ─── SVG layout constants ────────────────────────────────────────────────────
@@ -38,7 +38,6 @@ function computeWaterSurfaceY(fillFraction: number) {
 interface Props {
   size: () => number
   fillFraction: () => number
-  completedBottleCount: () => number
   onFillFractionChange: (newFillFraction: number) => void
   /** Called when the user releases the drag at or below the empty threshold. */
   onBottleEmptied: () => void
@@ -111,35 +110,6 @@ export function BottleSection(props: Props) {
 
   return (
     <div class="flex flex-col items-center gap-2.5 w-full">
-      {/* Badge strip — one badge per completed bottle */}
-      <div class="flex flex-wrap gap-2 justify-center min-h-7">
-        <For
-          each={Array.from(
-            { length: props.completedBottleCount() },
-            (_, i) => i,
-          )}
-        >
-          {() => (
-            <div class="bg-blue-500/15 text-sky-400 border border-sky-400/25 rounded-[20px] text-xs font-medium py-1 px-3 flex items-center gap-1.25">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M8 2h8l1 4H7L8 2z" />
-                <rect x="5" y="6" width="14" height="16" rx="3" />
-              </svg>
-              {props.size() >= 1000
-                ? (props.size() / 1000).toFixed(1) + 'L'
-                : props.size() + 'ml'}
-            </div>
-          )}
-        </For>
-      </div>
-
       {/* Interactive SVG bottle */}
       <div class="flex flex-col items-center select-none touch-none">
         <svg
