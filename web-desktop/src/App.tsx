@@ -2,7 +2,7 @@ import { createSignal, createMemo, onMount, onCleanup, Show } from 'solid-js'
 import { liveQuery } from 'dexie'
 import { db, type LocalWaterLog } from './db/db'
 import { syncEngine } from './db/sync'
-import { getTodayKey } from './utils'
+import { getTodayKey, toTimeInputValue } from './utils'
 import { StatsRow } from './components/StatsRow'
 import { BottleSection } from './components/BottleSection'
 import { SettingsSection } from './components/SettingsSection'
@@ -41,7 +41,12 @@ function loadPersistedState(): HydrationUIState {
       const today = getTodayKey()
       // New day — carry forward settings but reset today's progress
       if (parsed.date !== today) {
-        return { ...parsed, fillFraction: 1, completedBottleCount: 0, date: today }
+        return {
+          ...parsed,
+          fillFraction: 1,
+          completedBottleCount: 0,
+          date: today,
+        }
       }
       return parsed
     }
@@ -65,7 +70,9 @@ export default function App() {
   const [dailyGoal, setDailyGoal] = createSignal(initialState.goal)
 
   // Active-bottle interaction state
-  const [fillFraction, setFillFraction] = createSignal(initialState.fillFraction)
+  const [fillFraction, setFillFraction] = createSignal(
+    initialState.fillFraction,
+  )
   const [completedBottleCount, setCompletedBottleCount] = createSignal(
     initialState.completedBottleCount,
   )
@@ -102,7 +109,8 @@ export default function App() {
    */
   const totalMlConsumedToday = () =>
     Math.round(
-      completedBottleCount() * bottleSize() + (1 - fillFraction()) * bottleSize(),
+      completedBottleCount() * bottleSize() +
+        (1 - fillFraction()) * bottleSize(),
     )
 
   /**
@@ -165,6 +173,19 @@ export default function App() {
   }) {
     const log = logBeingEdited()
     if (!log) return
+
+    // Nothing changed — close the dialog without touching the sync state.
+    // Timestamps are compared at local minute granularity (matching the time
+    // input's precision) so equivalent instants in different ISO formats
+    // (e.g. "...Z" vs "...+08:00") don't register as a spurious change.
+    const isUnchanged =
+      changes.amount_ml === log.amount_ml &&
+      toTimeInputValue(changes.logged_at) === toTimeInputValue(log.logged_at)
+    if (isUnchanged) {
+      setLogBeingEdited(null)
+      return
+    }
+
     await db.waterLogs.update(log.id, { ...changes, is_synced: 0 })
     setLogBeingEdited(null)
     syncEngine().catch(console.error)
