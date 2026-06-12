@@ -22,6 +22,23 @@ export function formatTime(isoTimestamp: string) {
   })
 }
 
+/** Converts an ISO timestamp into a local "HH:mm" string for an <input type="time">. */
+export function toTimeInputValue(isoTimestamp: string) {
+  const date = new Date(isoTimestamp)
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+/**
+ * Returns a new ISO timestamp that keeps the original date but applies the
+ * given local "HH:mm" time-of-day. Seconds and milliseconds are zeroed.
+ */
+export function withTimeOfDay(isoTimestamp: string, timeValue: string) {
+  const [hours, minutes] = timeValue.split(':').map(Number)
+  const date = new Date(isoTimestamp)
+  date.setHours(hours, minutes, 0, 0)
+  return date.toISOString()
+}
+
 /** Formats a millilitre value — displays as litres when ≥ 1000 ml (e.g. "1.5 L"), otherwise as "750 ml". */
 export function formatMl(milliliters: number) {
   return milliliters >= 1000

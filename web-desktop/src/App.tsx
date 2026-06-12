@@ -9,6 +9,7 @@ import { SettingsSection } from './components/SettingsSection'
 import { TodayLogList } from './components/TodayLogList'
 import { ConfirmLogDialog } from './components/dialogs/ConfirmLogDialog'
 import { DeleteLogDialog } from './components/dialogs/DeleteLogDialog'
+import { EditLogDialog } from './components/dialogs/EditLogDialog'
 
 /** localStorage key used to persist UI state between sessions. */
 const HYDRATION_STORAGE_KEY = 'wt_v2'
@@ -73,6 +74,9 @@ export default function App() {
   const [isConfirmVisible, setIsConfirmVisible] = createSignal(false)
   // The log entry pending deletion (null when no delete is in progress)
   const [logPendingDeletion, setLogPendingDeletion] =
+    createSignal<LocalWaterLog | null>(null)
+  // The log entry currently being edited (null when no edit is in progress)
+  const [logBeingEdited, setLogBeingEdited] =
     createSignal<LocalWaterLog | null>(null)
 
   // Live water logs from the local IndexedDB database
@@ -151,6 +155,21 @@ export default function App() {
     syncEngine().catch(console.error)
   }
 
+  /**
+   * Persists edits to a log entry: updates the amount and timestamp, flags it
+   * as unsynced in IndexedDB, then kicks off a background sync to the backend.
+   */
+  async function handleEditSave(changes: {
+    amount_ml: number
+    logged_at: string
+  }) {
+    const log = logBeingEdited()
+    if (!log) return
+    await db.waterLogs.update(log.id, { ...changes, is_synced: 0 })
+    setLogBeingEdited(null)
+    syncEngine().catch(console.error)
+  }
+
   /** Dismisses the confirm dialog and restores a near-empty bottle so the user can try again. */
   function handleLogCancel() {
     setFillFraction(0.05)
@@ -221,7 +240,11 @@ export default function App() {
         />
       </div>
 
-      <TodayLogList logs={todayLogs} onDelete={setLogPendingDeletion} />
+      <TodayLogList
+        logs={todayLogs}
+        onEdit={setLogBeingEdited}
+        onDelete={setLogPendingDeletion}
+      />
 
       <Show when={isConfirmVisible()}>
         <ConfirmLogDialog
@@ -229,6 +252,16 @@ export default function App() {
           onConfirm={handleLogConfirm}
           onCancel={handleLogCancel}
         />
+      </Show>
+
+      <Show when={logBeingEdited()}>
+        {(log) => (
+          <EditLogDialog
+            log={log()}
+            onSave={handleEditSave}
+            onCancel={() => setLogBeingEdited(null)}
+          />
+        )}
       </Show>
 
       <Show when={logPendingDeletion()}>
