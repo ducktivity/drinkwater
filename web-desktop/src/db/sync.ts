@@ -19,7 +19,7 @@ export const syncEngine = async () => {
       id: log.id,
       amount_ml: log.amount_ml,
       logged_at: log.logged_at,
-      is_deleted: log.is_deleted ?? false,
+      is_deleted: log.is_deleted,
     }))
 
     // 3. Make the type-safe API call to our Go backend

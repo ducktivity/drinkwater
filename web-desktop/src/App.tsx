@@ -1,184 +1,229 @@
-import { createSignal, onMount, Show } from 'solid-js'
+import { createSignal, createMemo, onMount, onCleanup, Show } from 'solid-js'
+import { liveQuery } from 'dexie'
 import { db, type LocalWaterLog } from './db/db'
 import { syncEngine } from './db/sync'
-import { liveQuery } from 'dexie'
+import { getTodayKey } from './utils'
+import { StatsRow } from './components/StatsRow'
+import { BottleSection } from './components/BottleSection'
+import { SettingsSection } from './components/SettingsSection'
+import { HistoryList } from './components/HistoryList'
+import { ConfirmOverlay } from './components/ConfirmOverlay'
 
-function App() {
-  const [logs, setLogs] = createSignal<LocalWaterLog[]>([])
+/** localStorage key used to persist UI state between sessions. */
+const HYDRATION_STORAGE_KEY = 'wt_v2'
 
-  // A simple daily goal variable
-  const DAILY_GOAL_ML = 2000
+/** Shape of the persisted UI state stored in localStorage. */
+interface HydrationUIState {
+  /** Bottle volume in ml configured by the user. */
+  size: number
+  /** Daily hydration goal in ml configured by the user. */
+  goal: number
+  /** Current fill fraction of the active bottle (0 = empty, 1 = full). */
+  fillFraction: number
+  /** Number of full bottles completed today. */
+  completedBottleCount: number
+  /** The date this state belongs to, as a YYYY-MM-DD key. */
+  date: string
+}
 
-  onMount(() => {
-    // 1. Setup the Dexie UI observer
-    const observable = liveQuery(() =>
-      db.waterLogs
-        .filter((log) => !log.is_deleted)
-        .reverse()
-        .sortBy('logged_at'),
+/**
+ * Reads persisted state from localStorage.
+ * If the stored date differs from today, resets the daily progress
+ * (completedBottleCount and fillFraction) while keeping user settings (size, goal).
+ */
+function loadPersistedState(): HydrationUIState {
+  try {
+    const serialized = localStorage.getItem(HYDRATION_STORAGE_KEY)
+    if (serialized) {
+      const parsed = JSON.parse(serialized) as HydrationUIState
+      const today = getTodayKey()
+      // New day — carry forward settings but reset today's progress
+      if (parsed.date !== today) {
+        return { ...parsed, fillFraction: 1, completedBottleCount: 0, date: today }
+      }
+      return parsed
+    }
+  } catch {
+    /* Ignore parse errors and fall through to defaults */
+  }
+  return {
+    size: 1000,
+    goal: 2000,
+    fillFraction: 1,
+    completedBottleCount: 0,
+    date: getTodayKey(),
+  }
+}
+
+export default function App() {
+  const initialState = loadPersistedState()
+
+  // User-configurable settings
+  const [bottleSize, setBottleSize] = createSignal(initialState.size)
+  const [dailyGoal, setDailyGoal] = createSignal(initialState.goal)
+
+  // Active-bottle interaction state
+  const [fillFraction, setFillFraction] = createSignal(initialState.fillFraction)
+  const [completedBottleCount, setCompletedBottleCount] = createSignal(
+    initialState.completedBottleCount,
+  )
+
+  // UI overlay state
+  const [isConfirmVisible, setIsConfirmVisible] = createSignal(false)
+
+  // Live water logs from the local IndexedDB database
+  const [waterLogs, setWaterLogs] = createSignal<LocalWaterLog[]>([])
+
+  /** Persists the current UI state snapshot to localStorage. */
+  function persistState() {
+    localStorage.setItem(
+      HYDRATION_STORAGE_KEY,
+      JSON.stringify({
+        size: bottleSize(),
+        goal: dailyGoal(),
+        fillFraction: fillFraction(),
+        completedBottleCount: completedBottleCount(),
+        date: getTodayKey(),
+      }),
+    )
+  }
+
+  /**
+   * Total millilitres consumed today: all completed bottles plus whatever
+   * was already drunk from the active (partially-empty) bottle.
+   */
+  const totalMlConsumedToday = () =>
+    Math.round(
+      completedBottleCount() * bottleSize() + (1 - fillFraction()) * bottleSize(),
     )
 
-    const subscription = observable.subscribe({
-      next: (result) => setLogs(result),
-      error: (err) => console.error(err),
-    })
-
-    // 2. Run an initial sync when the app first opens
-    syncEngine().catch(console.error)
-
-    // 3. Listen for the internet coming back online
-    const handleOnline = () => {
-      console.log('📶 Internet restored! Running background sync...')
-      syncEngine().catch(console.error)
+  /**
+   * Aggregated daily totals for the past 14 days (excluding today).
+   * Returned as a date-descending array of [YYYY-MM-DD, totalMl] pairs.
+   */
+  const pastDailyHistory = createMemo(() => {
+    const today = getTodayKey()
+    const dailyTotals = new Map<string, number>()
+    for (const log of waterLogs()) {
+      const dateKey = log.logged_at.substring(0, 10)
+      // Exclude today — it is displayed live in the stats row
+      if (dateKey !== today) {
+        dailyTotals.set(dateKey, (dailyTotals.get(dateKey) ?? 0) + log.amount_ml)
+      }
     }
-    window.addEventListener('online', handleOnline)
-
-    // Cleanup when component unmounts
-    return () => {
-      subscription.unsubscribe()
-      window.removeEventListener('online', handleOnline)
-    }
+    return [...dailyTotals.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .slice(0, 14)
   })
 
-  const handleDrinkWater = async (amount: number) => {
-    const newLog: LocalWaterLog = {
+  function handleFillFractionChange(newFillFraction: number) {
+    setFillFraction(newFillFraction)
+    persistState()
+  }
+
+  /** Called when the user drags the bottle to empty — triggers the confirm dialog. */
+  function handleBottleEmptied() {
+    setFillFraction(0)
+    persistState()
+    setIsConfirmVisible(true)
+  }
+
+  /** Commits the completed bottle to IndexedDB and kicks off a background sync. */
+  async function handleLogConfirm() {
+    await db.waterLogs.add({
       id: crypto.randomUUID(),
-      amount_ml: amount,
+      amount_ml: bottleSize(),
       logged_at: new Date().toISOString(),
       is_deleted: false,
       is_synced: 0,
-    }
-
-    // 1. Save locally (This blocks just long enough to write to IndexedDB)
-    await db.waterLogs.add(newLog)
-
-    // 2. Background Sync (Fire-and-forget)
-    // We do NOT use 'await' here. The function will execute in the background
-    // while the user is free to keep clicking around the UI.
-    syncEngine().catch((err) => console.error('Background sync error:', err))
+    })
+    setCompletedBottleCount(completedBottleCount() + 1)
+    setFillFraction(1)
+    setIsConfirmVisible(false)
+    persistState()
+    syncEngine().catch(console.error)
   }
 
-  // Reactive calculations for our UI
-  const totalDrank = () => logs().reduce((sum, log) => sum + log.amount_ml, 0)
-  const progressPercentage = () =>
-    Math.min((totalDrank() / DAILY_GOAL_ML) * 100, 100)
+  /** Dismisses the confirm dialog and restores a near-empty bottle so the user can try again. */
+  function handleLogCancel() {
+    setFillFraction(0.05)
+    setIsConfirmVisible(false)
+    persistState()
+  }
+
+  onMount(() => {
+    // Subscribe to live changes in the local water log table
+    const liveQuerySubscription = liveQuery(() =>
+      db.waterLogs.filter((log) => !log.is_deleted).sortBy('logged_at'),
+    ).subscribe({ next: setWaterLogs, error: console.error })
+
+    // Attempt an initial sync on app load
+    syncEngine().catch(console.error)
+
+    // Re-sync whenever the device regains network connectivity
+    const handleOnline = () => syncEngine().catch(console.error)
+    window.addEventListener('online', handleOnline)
+
+    onCleanup(() => {
+      liveQuerySubscription.unsubscribe()
+      window.removeEventListener('online', handleOnline)
+    })
+  })
+
+  const todayDisplayString = new Date().toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'long',
+  })
 
   return (
-    <div class="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans text-slate-800">
-      {/* Main Dashboard Card */}
-      <div class="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden border border-slate-100">
-        {/* Header Section */}
-        <div class="bg-blue-600 p-8 text-white text-center rounded-b-3xl shadow-md relative z-10">
-          <h1 class="text-3xl font-bold tracking-tight mb-2">Drinkwater 💧</h1>
-          <p class="text-blue-200 font-medium mb-6">
-            Stay hydrated, stay healthy.
-          </p>
+    <div class="min-h-screen bg-[#0f1117] text-[#f0f2f7] font-sans flex flex-col items-center px-4 pt-6 pb-10">
+      <header class="w-full max-w-105 mb-7">
+        <div class="text-xl font-semibold tracking-tight">Hydration</div>
+        <div class="text-[13px] text-[#7a7f96]">{todayDisplayString}</div>
+      </header>
 
-          {/* Progress Circle / Text */}
-          <div class="text-5xl font-extrabold mb-2">
-            {totalDrank()}{' '}
-            <span class="text-2xl text-blue-300 font-normal">
-              / {DAILY_GOAL_ML} ml
-            </span>
-          </div>
+      <div class="w-full max-w-105 bg-[#1a1d26] border border-white/8 rounded-2xl pt-7 px-6 pb-6 flex flex-col items-center gap-6">
+        <StatsRow
+          totalMl={totalMlConsumedToday}
+          completedBottleCount={completedBottleCount}
+          fillFraction={fillFraction}
+          goal={dailyGoal}
+        />
 
-          {/* Progress Bar */}
-          <div class="w-full bg-blue-800 rounded-full h-4 mt-4 overflow-hidden">
-            <div
-              class="bg-blue-300 h-4 rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${progressPercentage()}%` }}
-            ></div>
-          </div>
-        </div>
+        <BottleSection
+          size={bottleSize}
+          fillFraction={fillFraction}
+          completedBottleCount={completedBottleCount}
+          onFillFractionChange={handleFillFractionChange}
+          onBottleEmptied={handleBottleEmptied}
+        />
 
-        {/* Action Buttons */}
-        <div class="p-6 pb-2">
-          <div class="grid grid-cols-2 gap-4 mb-4">
-            <button
-              onClick={() => handleDrinkWater(250)}
-              class="bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-4 px-4 rounded-2xl transition shadow-sm active:scale-95"
-            >
-              🥛 +250ml
-            </button>
-            <button
-              onClick={() => handleDrinkWater(500)}
-              class="bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-4 px-4 rounded-2xl transition shadow-sm active:scale-95"
-            >
-              🥤 +500ml
-            </button>
-          </div>
+        <div class="w-full h-px bg-white/8" />
 
-          <button
-            onClick={syncEngine}
-            class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl transition shadow active:scale-95 flex items-center justify-center gap-2"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-            Sync with Cloud
-          </button>
-        </div>
-
-        {/* History List */}
-        <div class="p-6 pt-2">
-          <h2 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b pb-2">
-            Today's History
-          </h2>
-
-          <div class="space-y-3 max-h-64 overflow-y-auto pr-2">
-            {logs().length === 0 ? (
-              <p class="text-center text-slate-400 italic py-4">
-                No water logged yet today.
-              </p>
-            ) : (
-              logs().map((log) => (
-                <div class="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <div class="flex items-center gap-3">
-                    <div class="bg-blue-100 text-blue-600 p-2 rounded-lg font-bold">
-                      {log.amount_ml}ml
-                    </div>
-                    <div class="text-slate-500 text-sm font-medium">
-                      {new Date(log.logged_at).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Status Indicator */}
-                  <div>
-                    <Show
-                      when={log.is_synced}
-                      fallback={
-                        <span class="text-amber-500 bg-amber-50 px-2 py-1 rounded-md text-xs font-bold border border-amber-100">
-                          Pending
-                        </span>
-                      }
-                    >
-                      <span class="text-emerald-500 bg-emerald-50 px-2 py-1 rounded-md text-xs font-bold border border-emerald-100">
-                        Synced
-                      </span>
-                    </Show>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <SettingsSection
+          size={bottleSize}
+          goal={dailyGoal}
+          onSizeChange={(newSize) => {
+            setBottleSize(newSize)
+            persistState()
+          }}
+          onGoalChange={(newGoal) => {
+            setDailyGoal(newGoal)
+            persistState()
+          }}
+        />
       </div>
+
+      <HistoryList history={pastDailyHistory} />
+
+      <Show when={isConfirmVisible()}>
+        <ConfirmOverlay
+          size={bottleSize}
+          onConfirm={handleLogConfirm}
+          onCancel={handleLogCancel}
+        />
+      </Show>
     </div>
   )
 }
-
-export default App
