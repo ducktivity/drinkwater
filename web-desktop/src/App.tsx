@@ -1,4 +1,4 @@
-import { createSignal, onMount } from 'solid-js'
+import { createSignal, onMount, Show } from 'solid-js'
 import { db, type LocalWaterLog } from './db/db'
 import { syncEngine } from './db/sync'
 import { liveQuery } from 'dexie'
@@ -10,6 +10,7 @@ function App() {
   const DAILY_GOAL_ML = 2000
 
   onMount(() => {
+    // 1. Setup the Dexie UI observer
     const observable = liveQuery(() =>
       db.waterLogs
         .filter((log) => !log.is_deleted)
@@ -22,7 +23,21 @@ function App() {
       error: (err) => console.error(err),
     })
 
-    return () => subscription.unsubscribe()
+    // 2. Run an initial sync when the app first opens
+    syncEngine().catch(console.error)
+
+    // 3. Listen for the internet coming back online
+    const handleOnline = () => {
+      console.log('📶 Internet restored! Running background sync...')
+      syncEngine().catch(console.error)
+    }
+    window.addEventListener('online', handleOnline)
+
+    // Cleanup when component unmounts
+    return () => {
+      subscription.unsubscribe()
+      window.removeEventListener('online', handleOnline)
+    }
   })
 
   const handleDrinkWater = async (amount: number) => {
@@ -33,7 +48,14 @@ function App() {
       is_deleted: false,
       is_synced: 0,
     }
+
+    // 1. Save locally (This blocks just long enough to write to IndexedDB)
     await db.waterLogs.add(newLog)
+
+    // 2. Background Sync (Fire-and-forget)
+    // We do NOT use 'await' here. The function will execute in the background
+    // while the user is free to keep clicking around the UI.
+    syncEngine().catch((err) => console.error('Background sync error:', err))
   }
 
   // Reactive calculations for our UI
@@ -136,15 +158,18 @@ function App() {
 
                   {/* Status Indicator */}
                   <div>
-                    {log.is_synced ? (
+                    <Show
+                      when={log.is_synced}
+                      fallback={
+                        <span class="text-amber-500 bg-amber-50 px-2 py-1 rounded-md text-xs font-bold border border-amber-100">
+                          Pending
+                        </span>
+                      }
+                    >
                       <span class="text-emerald-500 bg-emerald-50 px-2 py-1 rounded-md text-xs font-bold border border-emerald-100">
                         Synced
                       </span>
-                    ) : (
-                      <span class="text-amber-500 bg-amber-50 px-2 py-1 rounded-md text-xs font-bold border border-amber-100">
-                        Pending
-                      </span>
-                    )}
+                    </Show>
                   </div>
                 </div>
               ))
