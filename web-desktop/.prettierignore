@@ -1,0 +1,9 @@
+dist
+node_modules
+pnpm-lock.yaml
+
+# Auto-generated types (DO NOT EDIT)
+src/types/schema.d.ts
+
+# Generated OpenAPI specs
+../shared-schemas/openapi.json
