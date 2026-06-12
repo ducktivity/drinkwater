@@ -17,7 +17,7 @@ export function ConfirmLogDialog(props: Props) {
       <div class="bg-[#1a1d26] border border-white/8 rounded-2xl pt-7 px-6 pb-5 max-w-85 w-full text-center">
         <div class="text-[36px] mb-3">🧊</div>
         <div class="text-[17px] font-semibold mb-2">Bottle finished?</div>
-        <div class="text-sm text-[#7a7f96] mb-5 leading-normal">
+        <div class="text-sm/normal text-[#7a7f96] mb-5 ">
           Log {formatMl(props.size())} as finished?
         </div>
         <div class="flex gap-2.5">

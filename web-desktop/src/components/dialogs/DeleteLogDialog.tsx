@@ -18,7 +18,7 @@ export function DeleteLogDialog(props: Props) {
       <div class="bg-[#1a1d26] border border-white/8 rounded-2xl pt-7 px-6 pb-5 max-w-85 w-full text-center">
         <div class="text-[36px] mb-3">🗑️</div>
         <div class="text-[17px] font-semibold mb-2">Delete this log?</div>
-        <div class="text-sm text-[#7a7f96] mb-5 leading-normal">
+        <div class="text-sm/normal text-[#7a7f96] mb-5 ">
           Remove the {formatMl(props.log.amount_ml)} entry? This can't be undone.
         </div>
         <div class="flex gap-2.5">

@@ -39,7 +39,7 @@ export function EditLogDialog(props: Props) {
             <input
               type="time"
               value={timeValue()}
-              class="bg-[#222535] border border-white/8 rounded-lg text-[#f0f2f7] text-sm font-medium py-1.5 px-2.5 outline-none [color-scheme:dark]"
+              class="bg-[#222535] border border-white/8 rounded-lg text-[#f0f2f7] text-sm font-medium py-1.5 px-2.5 outline-none scheme-dark"
               onInput={(e) => setTimeValue(e.currentTarget.value)}
             />
           </label>

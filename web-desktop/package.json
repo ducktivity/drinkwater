@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "check": "pnpm run typecheck && pnpm run lint",
     "generate-types": "swagger2openapi ../shared-schemas/swagger.json -o ../shared-schemas/openapi.json && openapi-typescript ../shared-schemas/openapi.json -o src/types/schema.d.ts",
     "preview": "vite preview"
   },
@@ -18,6 +20,9 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "@types/node": "^24.12.3",
+    "@typescript-eslint/parser": "^8.61.0",
+    "eslint": "^10.4.1",
+    "eslint-plugin-better-tailwindcss": "^4.6.0",
     "openapi-typescript": "^7.13.0",
     "swagger2openapi": "^7.0.8",
     "tailwindcss": "^4.3.0",
