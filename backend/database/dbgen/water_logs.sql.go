@@ -103,6 +103,7 @@ VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (id) DO UPDATE SET
     amount_ml = EXCLUDED.amount_ml,
     is_deleted = EXCLUDED.is_deleted,
+    logged_at = EXCLUDED.logged_at,
     server_updated_at = EXCLUDED.server_updated_at
 `
 
