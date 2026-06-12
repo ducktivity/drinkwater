@@ -1,5 +1,11 @@
 # Backend Development Documentation
 
+### Start up local dev (live reload)
+
+```bash
+go tool air
+```
+
 ### Create a new DB schema migration
 
 ```bash
@@ -25,6 +31,12 @@ Make sure `DATABASE_URL` is in `backend/.env`
 
 ```bash
 ./scripts/db-codegen.sh
+```
+
+or
+
+```bash
+go tool sqlc generate
 ```
 
 - Use-case: After migration (up/down) or writing anything new into [sql/](sql/).

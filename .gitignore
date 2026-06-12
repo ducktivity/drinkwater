@@ -11,6 +11,7 @@ web-desktop/src-tauri/target/
 backend/bin/
 backend/*.exe
 backend/*.app
+backend/tmp/
 
 # Mobile (Flutter)
 mobile/.dart_tool/
