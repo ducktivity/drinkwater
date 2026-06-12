@@ -79,6 +79,13 @@ export default function App() {
 
   // UI overlay state
   const [isConfirmVisible, setIsConfirmVisible] = createSignal(false)
+  // Millilitres the confirm dialog will commit when accepted. This is the full
+  // bottle size when emptying via drag, or the partially-drunk amount when the
+  // user taps "Log drank".
+  const [pendingLogMl, setPendingLogMl] = createSignal(0)
+  // The fill fraction to restore if the user cancels the confirm dialog. Lets the
+  // drag-to-empty and "log drank" flows each return the bottle to a sensible level.
+  const [fillToRestoreOnCancel, setFillToRestoreOnCancel] = createSignal(0.05)
   // The log entry pending deletion (null when no delete is in progress)
   const [logPendingDeletion, setLogPendingDeletion] =
     createSignal<LocalWaterLog | null>(null)
@@ -145,22 +152,41 @@ export default function App() {
   function handleBottleEmptied() {
     setFillFraction(0)
     setSettledFillFraction(0)
+    // The whole bottle was emptied, so the pending log is the full bottle size.
+    setPendingLogMl(bottleSize())
+    // If cancelled, restore a near-empty bottle so the user can retry the drag.
+    setFillToRestoreOnCancel(0.05)
     persistState()
     setIsConfirmVisible(true)
   }
 
-  /** Commits the completed bottle to IndexedDB and kicks off a background sync. */
+  /**
+   * Called when the user taps "Log drank": logs the amount consumed from the
+   * active bottle so far (without requiring a drag to empty) via the confirm
+   * dialog. The bottle level is left untouched until the log is confirmed.
+   */
+  function handleLogDrank() {
+    const drankMl = Math.round((1 - fillFraction()) * bottleSize())
+    if (drankMl <= 0) return
+    setPendingLogMl(drankMl)
+    // If cancelled, restore the level the bottle was at before opening the dialog.
+    setFillToRestoreOnCancel(fillFraction())
+    setIsConfirmVisible(true)
+  }
+
+  /** Commits the pending amount to IndexedDB and kicks off a background sync. */
   async function handleLogConfirm() {
     await db.waterLogs.add({
       id: crypto.randomUUID(),
-      amount_ml: bottleSize(),
+      amount_ml: pendingLogMl(),
       logged_at: new Date().toISOString(),
       is_deleted: false,
       is_synced: 0,
     })
     setFillFraction(1)
-    // The bottle is now logged and full again, so it no longer contributes to
-    // the active-bottle portion of the daily total (it counts via the log above).
+    // The drunk amount is now recorded as a log and the bottle is full again, so
+    // the active bottle no longer contributes to the active-bottle portion of the
+    // daily total (it counts via the log above).
     setSettledFillFraction(1)
     setIsConfirmVisible(false)
     persistState()
@@ -207,10 +233,10 @@ export default function App() {
     syncEngine().catch(console.error)
   }
 
-  /** Dismisses the confirm dialog and restores a near-empty bottle so the user can try again. */
+  /** Dismisses the confirm dialog and restores the bottle to the level captured when it opened. */
   function handleLogCancel() {
-    setFillFraction(0.05)
-    setSettledFillFraction(0.05)
+    setFillFraction(fillToRestoreOnCancel())
+    setSettledFillFraction(fillToRestoreOnCancel())
     setIsConfirmVisible(false)
     persistState()
   }
@@ -256,6 +282,7 @@ export default function App() {
           onFillFractionChange={handleFillFractionChange}
           onBottleEmptied={handleBottleEmptied}
           onDragSettled={handleDragSettled}
+          onLogDrank={handleLogDrank}
         />
 
         <div class="w-full h-px bg-white/8" />
@@ -282,7 +309,7 @@ export default function App() {
 
       <Show when={isConfirmVisible()}>
         <ConfirmLogDialog
-          size={bottleSize}
+          amountMl={pendingLogMl}
           onConfirm={handleLogConfirm}
           onCancel={handleLogCancel}
         />

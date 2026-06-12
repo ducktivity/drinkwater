@@ -43,6 +43,8 @@ interface Props {
   onBottleEmptied: () => void
   /** Called when the user releases a drag above the empty threshold, to commit the resting level. */
   onDragSettled: () => void
+  /** Called when the user taps "Log drank" to log the amount consumed so far without emptying the bottle. */
+  onLogDrank: () => void
 }
 
 export function BottleSection(props: Props) {
@@ -51,6 +53,10 @@ export function BottleSection(props: Props) {
   let svgElement!: SVGSVGElement
 
   const waterSurfaceY = () => computeWaterSurfaceY(props.fillFraction())
+
+  /** Millilitres drunk from the active bottle so far (full size minus the remaining level), rounded. */
+  const mlDrankSoFar = () =>
+    Math.round((1 - props.fillFraction()) * props.size())
 
   /** Human-readable label shown below the bottle describing the current fill level. */
   const bottleLevelLabel = () => {
@@ -234,6 +240,17 @@ export function BottleSection(props: Props) {
       <div class="text-[13px] text-[#7a7f96] text-center">
         {bottleLevelLabel()}
       </div>
+
+      {/* Log the amount drunk so far without dragging the bottle all the way to empty.
+          Disabled until at least 1 ml has been consumed from the active bottle. */}
+      <Show when={mlDrankSoFar() > 0}>
+        <button
+          class="px-4 py-2 rounded-[10px] border border-white/10 bg-[#222535] text-[13px] font-semibold text-[#f0f2f7] cursor-pointer"
+          onClick={() => props.onLogDrank()}
+        >
+          Log {mlDrankSoFar()} ml drank
+        </button>
+      </Show>
     </div>
   )
 }
