@@ -2,6 +2,7 @@ import { createSignal, createMemo, onMount, onCleanup, Show } from 'solid-js'
 import { liveQuery } from 'dexie'
 import { db, type LocalWaterLog } from './db/db'
 import { syncEngine } from './db/sync'
+import { cleanupSyncedStaleLogs } from './db/cleanup'
 import { getTodayKey, toTimeInputValue } from './utils'
 import { StatsRow } from './components/StatsRow'
 import { BottleSection } from './components/BottleSection'
@@ -246,6 +247,10 @@ export default function App() {
     const liveQuerySubscription = liveQuery(() =>
       db.waterLogs.filter((log) => !log.is_deleted).sortBy('logged_at'),
     ).subscribe({ next: setWaterLogs, error: console.error })
+
+    // Prune stale (non-today) synced logs that the UI never renders. Runs even
+    // when offline, where the sync below would bail before its own cleanup step.
+    cleanupSyncedStaleLogs().catch(console.error)
 
     // Attempt an initial sync on app load
     syncEngine().catch(console.error)

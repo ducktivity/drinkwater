@@ -1,5 +1,6 @@
 import { db } from './db'
 import { apiClient } from './api'
+import { cleanupSyncedStaleLogs } from './cleanup'
 
 export const syncEngine = async () => {
   try {
@@ -62,6 +63,13 @@ export const syncEngine = async () => {
       localStorage.setItem('last_sync_time', data.server_time)
     }
     console.log(`✅ Sync complete! Server time: ${data.server_time}`)
+
+    // 7. Now that local logs are confirmed on the server, drop stale (non-today)
+    // synced entries so IndexedDB doesn't accumulate data the UI never renders.
+    const removed = await cleanupSyncedStaleLogs()
+    if (removed > 0) {
+      console.log(`🧹 Cleaned up ${removed} stale synced log(s).`)
+    }
   } catch (err) {
     // If we are offline, fetch fails here. We just catch it silently.
     // The user doesn't care, they are local-first!
