@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b --noEmit",
     "generate-types": "swagger2openapi ../shared-schemas/swagger.json -o ../shared-schemas/openapi.json && openapi-typescript ../shared-schemas/openapi.json -o src/types/schema.d.ts",
     "preview": "vite preview"
   },
