@@ -13,11 +13,12 @@ export function formatDay(dateKey: string) {
   })
 }
 
-/** Formats an ISO timestamp into a human-readable local time (e.g. "14:30"). */
+/** Formats an ISO timestamp into a human-readable 12-hour local time (e.g. "2:30 PM"). */
 export function formatTime(isoTimestamp: string) {
-  return new Date(isoTimestamp).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
+  return new Date(isoTimestamp).toLocaleTimeString('en-US', {
+    hour: 'numeric',
     minute: '2-digit',
+    hour12: true,
   })
 }
 

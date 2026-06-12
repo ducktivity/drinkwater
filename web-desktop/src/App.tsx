@@ -7,7 +7,8 @@ import { StatsRow } from './components/StatsRow'
 import { BottleSection } from './components/BottleSection'
 import { SettingsSection } from './components/SettingsSection'
 import { TodayLogList } from './components/TodayLogList'
-import { ConfirmOverlay } from './components/ConfirmOverlay'
+import { ConfirmLogDialog } from './components/dialogs/ConfirmLogDialog'
+import { DeleteLogDialog } from './components/dialogs/DeleteLogDialog'
 
 /** localStorage key used to persist UI state between sessions. */
 const HYDRATION_STORAGE_KEY = 'wt_v2'
@@ -70,6 +71,9 @@ export default function App() {
 
   // UI overlay state
   const [isConfirmVisible, setIsConfirmVisible] = createSignal(false)
+  // The log entry pending deletion (null when no delete is in progress)
+  const [logPendingDeletion, setLogPendingDeletion] =
+    createSignal<LocalWaterLog | null>(null)
 
   // Live water logs from the local IndexedDB database
   const [waterLogs, setWaterLogs] = createSignal<LocalWaterLog[]>([])
@@ -132,6 +136,18 @@ export default function App() {
     setFillFraction(1)
     setIsConfirmVisible(false)
     persistState()
+    syncEngine().catch(console.error)
+  }
+
+  /**
+   * Soft-deletes the pending log entry: flags it as deleted and unsynced in
+   * IndexedDB, then kicks off a background sync to propagate to the backend.
+   */
+  async function handleDeleteConfirm() {
+    const log = logPendingDeletion()
+    if (!log) return
+    await db.waterLogs.update(log.id, { is_deleted: true, is_synced: 0 })
+    setLogPendingDeletion(null)
     syncEngine().catch(console.error)
   }
 
@@ -205,14 +221,24 @@ export default function App() {
         />
       </div>
 
-      <TodayLogList logs={todayLogs} />
+      <TodayLogList logs={todayLogs} onDelete={setLogPendingDeletion} />
 
       <Show when={isConfirmVisible()}>
-        <ConfirmOverlay
+        <ConfirmLogDialog
           size={bottleSize}
           onConfirm={handleLogConfirm}
           onCancel={handleLogCancel}
         />
+      </Show>
+
+      <Show when={logPendingDeletion()}>
+        {(log) => (
+          <DeleteLogDialog
+            log={log()}
+            onConfirm={handleDeleteConfirm}
+            onCancel={() => setLogPendingDeletion(null)}
+          />
+        )}
       </Show>
     </div>
   )
