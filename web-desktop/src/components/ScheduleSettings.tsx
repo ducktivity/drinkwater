@@ -62,50 +62,61 @@ export function ScheduleSettings(props: Props) {
         {(checkpoint) => {
           const status = () => statusById().get(checkpoint.id)
           return (
-            <div class="flex items-center gap-2">
-              <TimeInput
-                value={checkpoint.time}
-                onValueChange={(time) =>
-                  props.onUpdateCheckpoint(checkpoint.id, { time })
-                }
-              />
-              <NumberInput
-                value={checkpoint.targetMl}
-                step={100}
-                unit="ml"
-                fallback={0}
-                onValueChange={(targetMl) =>
-                  props.onUpdateCheckpoint(checkpoint.id, { targetMl })
-                }
-              />
-              <span
-                class={`text-[11px] font-semibold ml-auto ${STATE_STYLES[status()?.state ?? 'upcoming']}`}
+            <div>
+              <div class="flex items-center gap-2">
+                <TimeInput
+                  value={checkpoint.time}
+                  onValueChange={(time) =>
+                    props.onUpdateCheckpoint(checkpoint.id, { time })
+                  }
+                />
+                <NumberInput
+                  value={checkpoint.targetMl}
+                  step={100}
+                  unit="ml"
+                  fallback={0}
+                  onValueChange={(targetMl) =>
+                    props.onUpdateCheckpoint(checkpoint.id, { targetMl })
+                  }
+                />
+
+                <div class="ml-auto flex items-center gap-2">
+                  <span
+                    class={`sm:inline hidden text-[11px] font-semibold ${STATE_STYLES[status()?.state ?? 'upcoming']}`}
+                  >
+                    {STATE_LABELS[status()?.state ?? 'upcoming']}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Remove checkpoint"
+                    class="text-[#7a7f96] hover:text-red-400 cursor-pointer p-0.5 leading-none transition-colors"
+                    onClick={() => props.onRemoveCheckpoint(checkpoint.id)}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      <line x1="10" y1="11" x2="10" y2="17" />
+                      <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div
+                class={`sm:hidden text-[11px] font-semibold ${STATE_STYLES[status()?.state ?? 'upcoming']}`}
               >
                 {STATE_LABELS[status()?.state ?? 'upcoming']}
-              </span>
-              <button
-                type="button"
-                aria-label="Remove checkpoint"
-                class="text-[#7a7f96] hover:text-red-400 cursor-pointer p-0.5 leading-none transition-colors"
-                onClick={() => props.onRemoveCheckpoint(checkpoint.id)}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M3 6h18" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  <line x1="10" y1="11" x2="10" y2="17" />
-                  <line x1="14" y1="11" x2="14" y2="17" />
-                </svg>
-              </button>
+              </div>
             </div>
           )
         }}
