@@ -2,6 +2,7 @@ import { createSignal } from 'solid-js'
 import { toTimeInputValue, withTimeOfDay } from '../../utils'
 import type { LocalWaterLog } from '../../db/db'
 import { NumberInput } from '../ui/NumberInput'
+import { TimeInput } from '../ui/TimeInput'
 
 interface Props {
   /** The log entry being edited — used to seed the form fields. */
@@ -37,12 +38,7 @@ export function EditLogDialog(props: Props) {
         <div class="flex flex-col gap-3 mb-5">
           <label class="flex items-center justify-between gap-2.5">
             <span class="text-[13px] text-[#7a7f96]">Time</span>
-            <input
-              type="time"
-              value={timeValue()}
-              class="bg-[#222535] border border-white/8 rounded-lg text-[#f0f2f7] text-sm font-medium py-1.5 px-2.5 outline-none scheme-dark"
-              onInput={(e) => setTimeValue(e.currentTarget.value)}
-            />
+            <TimeInput value={timeValue()} eager onValueChange={setTimeValue} />
           </label>
 
           <label class="flex items-center justify-between gap-2.5">

@@ -6,6 +6,7 @@ import {
   type ScheduleCheckpoint,
 } from '../schedule'
 import { NumberInput } from './ui/NumberInput'
+import { TimeInput } from './ui/TimeInput'
 
 interface Props {
   schedule: () => ScheduleCheckpoint[]
@@ -62,14 +63,10 @@ export function ScheduleSettings(props: Props) {
           const status = () => statusById().get(checkpoint.id)
           return (
             <div class="flex items-center gap-2">
-              <input
-                type="time"
+              <TimeInput
                 value={checkpoint.time}
-                class="bg-[#222535] border border-white/8 rounded-lg text-[#f0f2f7] text-sm font-medium py-1.5 px-2.5 outline-none scheme-dark"
-                onChange={(e) =>
-                  props.onUpdateCheckpoint(checkpoint.id, {
-                    time: e.currentTarget.value,
-                  })
+                onValueChange={(time) =>
+                  props.onUpdateCheckpoint(checkpoint.id, { time })
                 }
               />
               <NumberInput
