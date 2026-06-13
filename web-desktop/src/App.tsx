@@ -1,4 +1,5 @@
 import { createSignal, createMemo, onMount, onCleanup, Show } from 'solid-js'
+import { createStore } from 'solid-js/store'
 import { liveQuery } from 'dexie'
 import { db, type LocalWaterLog } from './db/db'
 import { syncEngine } from './db/sync'
@@ -7,7 +8,10 @@ import { getTodayKey, toTimeInputValue } from './utils'
 import { StatsRow } from './components/StatsRow'
 import { BottleSection } from './components/BottleSection'
 import { SettingsSection } from './components/SettingsSection'
+import { ScheduleGoalBanner } from './components/ScheduleGoalBanner'
+import { ScheduleSettings } from './components/ScheduleSettings'
 import { TodayLogList } from './components/TodayLogList'
+import { DEFAULT_SCHEDULE, type ScheduleCheckpoint } from './schedule'
 import { ConfirmLogDialog } from './components/dialogs/ConfirmLogDialog'
 import { DeleteLogDialog } from './components/dialogs/DeleteLogDialog'
 import { EditLogDialog } from './components/dialogs/EditLogDialog'
@@ -23,6 +27,8 @@ interface HydrationUIState {
   goal: number
   /** Current fill fraction of the active bottle (0 = empty, 1 = full). */
   fillFraction: number
+  /** Timed hydration checkpoints (deadlines + cumulative targets). */
+  schedule: ScheduleCheckpoint[]
   /** The date this state belongs to, as a YYYY-MM-DD key. */
   date: string
 }
@@ -39,15 +45,19 @@ function loadPersistedState(): HydrationUIState {
     if (serialized) {
       const parsed = JSON.parse(serialized) as HydrationUIState
       const today = getTodayKey()
+      // Fall back to the default schedule for state persisted before the
+      // schedule feature existed.
+      const schedule = parsed.schedule ?? DEFAULT_SCHEDULE
       // New day — carry forward settings but reset the active bottle to full
       if (parsed.date !== today) {
         return {
           ...parsed,
+          schedule,
           fillFraction: 1,
           date: today,
         }
       }
-      return parsed
+      return { ...parsed, schedule }
     }
   } catch {
     /* Ignore parse errors and fall through to defaults */
@@ -56,6 +66,7 @@ function loadPersistedState(): HydrationUIState {
     size: 1000,
     goal: 2000,
     fillFraction: 1,
+    schedule: DEFAULT_SCHEDULE,
     date: getTodayKey(),
   }
 }
@@ -66,6 +77,19 @@ export default function App() {
   // User-configurable settings
   const [bottleSize, setBottleSize] = createSignal(initialState.size)
   const [dailyGoal, setDailyGoal] = createSignal(initialState.goal)
+  // Timed hydration schedule (deadlines + cumulative targets). Held in a store
+  // (not a signal) so edits mutate a single checkpoint field in place. This
+  // keeps each checkpoint's object reference stable, so the editor's <For> rows
+  // are reused rather than recreated on every keystroke — which is what keeps
+  // the time/amount inputs from losing focus mid-edit.
+  const [schedule, setSchedule] = createStore<ScheduleCheckpoint[]>(
+    initialState.schedule,
+  )
+
+  // Ticking clock that drives schedule status (next goal / behind warnings).
+  // Updated periodically so deadlines flip from "upcoming" to "missed" without
+  // requiring user interaction.
+  const [now, setNow] = createSignal(new Date())
 
   // Active-bottle interaction state
   const [fillFraction, setFillFraction] = createSignal(
@@ -105,6 +129,7 @@ export default function App() {
         size: bottleSize(),
         goal: dailyGoal(),
         fillFraction: fillFraction(),
+        schedule: schedule,
         date: getTodayKey(),
       }),
     )
@@ -234,6 +259,41 @@ export default function App() {
     syncEngine().catch(console.error)
   }
 
+  /**
+   * Updates a single field of one checkpoint in place. Using the store's
+   * path syntax (predicate + key + value) means only the targeted field
+   * changes, so the checkpoint's object identity — and the editor row bound to
+   * it — survives the edit instead of being recreated.
+   */
+  function handleCheckpointUpdate(
+    id: string,
+    changes: Partial<ScheduleCheckpoint>,
+  ) {
+    for (const [key, value] of Object.entries(changes)) {
+      setSchedule(
+        (checkpoint) => checkpoint.id === id,
+        key as keyof ScheduleCheckpoint,
+        value as never,
+      )
+    }
+    persistState()
+  }
+
+  /** Removes a checkpoint from the schedule. */
+  function handleCheckpointRemove(id: string) {
+    setSchedule((prev) => prev.filter((checkpoint) => checkpoint.id !== id))
+    persistState()
+  }
+
+  /** Appends a new midday checkpoint the user can then adjust. */
+  function handleCheckpointAdd() {
+    setSchedule((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), time: '12:00', targetMl: 1000 },
+    ])
+    persistState()
+  }
+
   /** Dismisses the confirm dialog and restores the bottle to the level captured when it opened. */
   function handleLogCancel() {
     setFillFraction(fillToRestoreOnCancel())
@@ -259,9 +319,13 @@ export default function App() {
     const handleOnline = () => syncEngine().catch(console.error)
     window.addEventListener('online', handleOnline)
 
+    // Advance the clock every 30s so schedule deadlines update on their own.
+    const clockInterval = setInterval(() => setNow(new Date()), 30_000)
+
     onCleanup(() => {
       liveQuerySubscription.unsubscribe()
       window.removeEventListener('online', handleOnline)
+      clearInterval(clockInterval)
     })
   })
 
@@ -280,6 +344,12 @@ export default function App() {
 
       <div class="w-full max-w-105 bg-[#1a1d26] border border-white/8 rounded-2xl pt-7 px-6 pb-6 flex flex-col items-center gap-6">
         <StatsRow totalMl={totalMlConsumedToday} goal={dailyGoal} />
+
+        <ScheduleGoalBanner
+          schedule={() => schedule}
+          totalMl={totalMlConsumedToday}
+          now={now}
+        />
 
         <BottleSection
           size={bottleSize}
@@ -303,6 +373,17 @@ export default function App() {
             setDailyGoal(newGoal)
             persistState()
           }}
+        />
+
+        <div class="w-full h-px bg-white/8" />
+
+        <ScheduleSettings
+          schedule={() => schedule}
+          totalMl={totalMlConsumedToday}
+          now={now}
+          onUpdateCheckpoint={handleCheckpointUpdate}
+          onRemoveCheckpoint={handleCheckpointRemove}
+          onAddCheckpoint={handleCheckpointAdd}
         />
       </div>
 

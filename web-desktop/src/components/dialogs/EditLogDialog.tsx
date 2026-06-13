@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js'
-import { clamp, toTimeInputValue, withTimeOfDay } from '../../utils'
+import { toTimeInputValue, withTimeOfDay } from '../../utils'
 import type { LocalWaterLog } from '../../db/db'
 
 interface Props {
@@ -55,9 +55,7 @@ export function EditLogDialog(props: Props) {
                 step="50"
                 class="bg-[#222535] border border-white/8 rounded-lg text-[#f0f2f7] text-sm font-medium w-18 py-1.5 px-2.5 text-right outline-none"
                 onInput={(e) =>
-                  setAmountMl(
-                    clamp(parseInt(e.currentTarget.value) || 0, 1, 3000),
-                  )
+                  setAmountMl(parseInt(e.currentTarget.value) || 1)
                 }
               />
               <span class="text-[13px] text-[#7a7f96]">ml</span>

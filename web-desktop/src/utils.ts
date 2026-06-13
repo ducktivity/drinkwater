@@ -39,6 +39,26 @@ export function withTimeOfDay(isoTimestamp: string, timeValue: string) {
   return date.toISOString()
 }
 
+/** Builds a Date at the given local "HH:mm" time-of-day, on the same calendar day as `reference`. */
+export function timeValueToDate(timeValue: string, reference: Date) {
+  const [hours, minutes] = timeValue.split(':').map(Number)
+  const date = new Date(reference)
+  date.setHours(hours, minutes, 0, 0)
+  return date
+}
+
+/** Formats an "HH:mm" time-of-day string into 12-hour local time (e.g. "9:00 AM"). */
+export function formatClockTime(timeValue: string) {
+  const [hours, minutes] = timeValue.split(':').map(Number)
+  const date = new Date()
+  date.setHours(hours, minutes, 0, 0)
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+}
+
 /** Formats a millilitre value — displays as litres when ≥ 1000 ml (e.g. "1.5 L"), otherwise as "750 ml". */
 export function formatMl(milliliters: number) {
   return milliliters >= 1000

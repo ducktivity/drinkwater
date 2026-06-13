@@ -1,5 +1,3 @@
-import { clamp } from '../utils'
-
 interface Props {
   size: () => number
   goal: () => number
@@ -22,9 +20,7 @@ export function SettingsSection(props: Props) {
             step="50"
             class="bg-[#222535] border border-white/8 rounded-lg text-[#f0f2f7] text-sm font-medium w-18 py-1.5 px-2.5 text-right outline-none"
             onChange={(e) =>
-              props.onSizeChange(
-                clamp(parseInt(e.currentTarget.value) || 1000, 100, 3000),
-              )
+              props.onSizeChange(parseInt(e.currentTarget.value) || 1000)
             }
           />
           <span class="text-[13px] text-[#7a7f96]">ml</span>
@@ -42,9 +38,7 @@ export function SettingsSection(props: Props) {
             step="100"
             class="bg-[#222535] border border-white/8 rounded-lg text-[#f0f2f7] text-sm font-medium w-18 py-1.5 px-2.5 text-right outline-none"
             onChange={(e) =>
-              props.onGoalChange(
-                clamp(parseInt(e.currentTarget.value) || 2000, 500, 8000),
-              )
+              props.onGoalChange(parseInt(e.currentTarget.value) || 2000)
             }
           />
           <span class="text-[13px] text-[#7a7f96]">ml</span>
