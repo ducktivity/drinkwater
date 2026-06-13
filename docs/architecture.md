@@ -170,8 +170,8 @@ graph TD
 
 ### Infrastructure Components
 
-1. **The Runtime:** A minimal **Docker Compose** file (version-controlled in the repo) runs two containers — the Go binary and **`cloudflared`**, the Cloudflare Tunnel daemon. `cloudflared` makes an **outbound** connection to the Cloudflare edge and forwards public traffic down that tunnel to the Go binary on `localhost`. TLS terminates at the edge, so there is no public reverse proxy, no Let's Encrypt certificate management, and no listening port.
-2. **The Hardware:** A **Hetzner shared-compute (CX/CPX) server**, starting around 5USD/month. Because Go is extremely memory efficient and the backend is stateless, a tiny shared instance comfortably handles the low-frequency, batched sync traffic, and can be destroyed and redeployed at will since it holds no durable data.
+1. **The Runtime:** A minimal **Docker Compose** stack (version-controlled in the repo) runs **`cloudflared`** (the Cloudflare Tunnel daemon) alongside the Go binary, which runs as **two interchangeable colors** (`app-blue` / `app-green`) on distinct `localhost` ports to enable zero-downtime blue-green cutover. `cloudflared` makes an **outbound** connection to the Cloudflare edge and forwards public traffic down that tunnel to whichever color is currently live on `localhost`. TLS terminates at the edge, so there is no public reverse proxy, no Let's Encrypt certificate management, and no listening port. An on-box **deploy agent** (see §7) reconciles the running color toward the latest promoted image; CI does not connect to the server.
+2. **The Hardware:** A **Hetzner shared-compute (CX/CPX) server**, starting around 5USD/month. Go is memory efficient and the backend is stateless, so a small shared instance handles the low-frequency, batched sync traffic, and can be destroyed and redeployed at will since it holds no durable data.
 3. **Database Persistence:** **NeonDB**, a managed serverless PostgreSQL, is the durable archive of all history (the local client store is pruned to today-only). It is chosen for affordability and safety: it **scales to zero** so we pay for database compute only while a sync is actually running, and it provides managed backups, point-in-time recovery, and failover that we would otherwise have to operate ourselves. The trade-off — network latency and cold-start wake from autosuspend — is acceptable because sync is infrequent and batched (one `POST /sync` per refresh); it is mitigated by placing the Neon project in the **same region** as the Hetzner server and using Neon's **pooled connection** endpoint to respect serverless connection limits.
 4. **Web Delivery:** The SolidJS web frontend (the SPA bundle) is deployed to **Cloudflare Pages**. This is completely free, globally distributed, and serves the static files at edge speeds, meaning the Hetzner server spends zero CPU cycles serving HTML/JS and dedicates 100% of its resources to processing sync requests.
 
@@ -184,3 +184,123 @@ The deployment is designed so that **nothing connects to the origin server direc
 - **Inbound flows through the edge only.** Public clients and third-party callers (e.g. **Stripe webhooks**) reach the API by calling the Cloudflare hostname; the edge accepts the request and forwards it down the tunnel to the Go binary. Webhook endpoints still verify their own authenticity (e.g. validating the `Stripe-Signature` header) and can be restricted to the provider's published IP ranges with a WAF rule.
 - **Outbound is unrestricted.** The server initiates its own outbound connections — the pooled query to NeonDB and the tunnel to Cloudflare — unaffected by the closed inbound firewall.
 - **Private admin access.** SSH is not exposed publicly. Administrative access is brokered through **Cloudflare Access** over the same edge (authenticated against our identity provider), so port 22 stays closed to the internet while remaining reachable to authorized operators.
+
+---
+
+## 7. Continuous Delivery & Release Management
+
+The deployment is **pull-based**. Because the Hetzner box has **no open inbound ports** (§6), CI cannot connect to it to deploy. CI builds, verifies, and publishes an immutable image; the server watches a registry channel tag and reconciles toward it. The CI runner holds no SSH keys or server credentials.
+
+Three artifacts ship from one monorepo on independent timelines and must stay mutually compatible: the **DB schema** (NeonDB), the **backend image** (Hetzner), and the **frontend bundle** (Cloudflare Pages).
+
+### Pipeline Overview
+
+```mermaid
+graph TD
+    Dev[Push / Merge to main] --> GHA
+
+    subgraph GitHub Actions - never touches the server
+        GHA[CI: lint - test - build] --> Img[Build backend image]
+        Img -->|push :sha-GITSHA immutable| GHCR[(GHCR registry)]
+        GHA --> FE[Build frontend bundle]
+    end
+
+    GHCR --> Gate{Manual promotion gate<br/>GitHub Environment approval}
+    Gate -->|retag :production -> :sha-GITSHA| GHCR
+    Gate -->|wrangler deploy AFTER backend live| Pages[Cloudflare Pages]
+
+    subgraph Hetzner box - outbound only
+        Agent[Deploy agent - systemd timer] -->|poll digest of :production| GHCR
+        Agent -->|on change| Reconcile[Reconcile: migrate -> start green -> cutover]
+    end
+```
+
+### Image Tagging & Promotion
+
+CI publishes every successful build to **GitHub Container Registry (GHCR)** under an **immutable** content tag, `:sha-<gitsha>`. A **moving channel tag**, `:production`, is repointed to a vetted `:sha-<gitsha>` to promote a build. This tag mechanism provides:
+
+- **A human gate.** Repointing `:production` runs behind a **GitHub Environment with a required reviewer**. Merging to `main` produces a candidate image; it does not ship to production until a maintainer approves the promotion.
+- **Rollback.** Rolling back is repointing `:production` to the previous `:sha-<gitsha>`. This is an **image/ingress revert only — never a down migration.** Because the release's expand migration is additive (§ Release Harmony), the previous backend runs correctly against the current schema, so the schema stays forward and any data the new version wrote is preserved. Down migrations are not used in production rollback.
+- **Provenance.** Every running container traces to an exact commit.
+
+The source repository is public, so the image is published public and the box needs no registry credentials to pull. If the image is later made private, the agent authenticates to GHCR with a read-only token, which is the only delivery secret the box requires.
+
+### The On-Box Deploy Agent & Blue-Green Cutover
+
+A **deploy agent** — a `systemd` timer driving a shell script — runs the reconciliation loop on the server. It polls the **digest** behind `:production`; when the digest changes, it runs a blue-green rollout:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Reg as GHCR (:production)
+    participant Agent as Deploy Agent (on box)
+    participant Mig as Migration Job (one-shot)
+    participant Neon as NeonDB
+    participant Green as New color (e.g. green)
+    participant CFd as cloudflared ingress
+
+    Agent->>Reg: Poll digest of :production
+    Note over Agent: Digest changed -> begin rollout
+    Agent->>Mig: Run goose `up` (expand-only migrations)
+    Mig->>Neon: Apply additive schema changes
+    Mig-->>Agent: Exit 0 (abort rollout on failure)
+    Agent->>Green: Start new color on idle localhost port
+    Agent->>Green: Probe /readyz (verifies Neon connectivity)
+    Note over Agent,Green: Only proceed once green is healthy
+    Agent->>CFd: Repoint ingress to green + SIGHUP reload
+    Note over CFd: Instant cutover, no dropped requests
+    Agent->>Agent: Keep old color warm N minutes, then reap
+```
+
+The agent is **digest-driven and direction-agnostic**: it compares the digest behind `:production` against the live color and converges toward whatever the tag points at, without distinguishing a roll-forward from a rollback. The same loop therefore serves both. On a rollback to an already-warm previous color the agent (or an operator) only flips ingress; if that color was already reaped, it re-pulls the previous `:sha` and runs the full loop.
+
+Properties of this loop:
+
+- **Migrations run server-side, before cutover.** The agent runs `goose up` as a **one-shot container** that exits before any new traffic is served. `goose up` is idempotent: on a roll-forward it applies the new expand migration; on a rollback the schema is already ahead, so there are no pending migrations and it is a no-op. Production DB credentials live on the box, not in CI. If the migration fails, the rollout aborts and the current color keeps serving.
+- **Health-gated cutover.** The new color must pass `/readyz` (which confirms it can reach NeonDB) before the agent changes ingress.
+- **Cutover is a `cloudflared` ingress reload.** The agent rewrites the tunnel ingress rule to point the hostname at the new color's port and sends `SIGHUP`; `cloudflared` hot-reloads without dropping connections.
+- **Rollback window.** The previous color keeps running for a few minutes, so an immediately detected regression is an ingress flip back without an image pull.
+
+### Release Harmony: Expand/Contract & Ordering
+
+Versions coexist in time, which constrains what a single release may change:
+
+1. During a blue-green cutover, the **old and new backend run against the same NeonDB**.
+2. The frontend is **local-first**: the Cloudflare Pages SPA is cached and runs offline for days, so a client can be on a stale frontend while the backend has moved on.
+
+Neither case tolerates a breaking change within one release. Schema and API changes follow the **expand/contract (parallel-change)** pattern:
+
+```mermaid
+graph LR
+    subgraph "Release N — EXPAND (additive only)"
+        E1[Add nullable/defaulted columns or tables]
+        E2[Backend writes old+new, reads new]
+        E3[Old backend & old frontend still valid]
+    end
+    subgraph "Release N+k — CONTRACT (later, separate release)"
+        C1[All clients & backends past old shape]
+        C2[Drop deprecated columns / endpoints]
+    end
+    E1 --> E2 --> E3 -.one or more releases later.-> C1 --> C2
+```
+
+- **Expand phase (this release):** schema changes are **additive** — new columns are nullable or defaulted, new tables/endpoints are introduced alongside the old. The migration ships **before** the backend that depends on it (the agent runs `goose up` before starting the new color).
+- **Contract phase (a later release):** destructive changes (dropping a column, removing an endpoint) happen only after every backend and every reachable client has moved past the old shape. Expand and contract for the same field are never shipped in one release.
+
+The per-release **deployment order** is therefore:
+
+1. **DB migration** (additive) — agent applies it server-side before cutover.
+2. **Backend** — new color goes live behind the health gate.
+3. **Frontend (Cloudflare Pages)** — deployed last, via `wrangler` in the same workflow, after the backend is serving. The API removed nothing, so the previously cached frontend keeps working; the new bundle becomes available on the next client load.
+
+The additive-only rule and this ordering keep schema, backend, and frontend compatible across their three independent timelines.
+
+### What CI Actually Runs
+
+The GitHub Actions workflow runs the same gates a developer runs locally before a build becomes a candidate image:
+
+- **Backend:** `go vet` / `go build`, unit tests, a check that generated artifacts are current (`export-swagger.sh`, `db-codegen.sh` produce no diff), and that `go fmt` is clean.
+- **Frontend:** `pnpm run check` (typecheck + Tailwind lint) and `pnpm run build`, plus a check that `generate-types` is in sync with the committed OpenAPI spec.
+- **Migrations:** new goose migrations apply cleanly, and down-migrations exist, against an ephemeral Postgres in CI.
+
+The image is pushed and made eligible for promotion only after all gates pass.
