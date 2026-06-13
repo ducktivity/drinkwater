@@ -40,19 +40,18 @@ export const syncEngine = async () => {
 
     if (!data) return
 
-    // 4. We successfully pushed! Mark our local logs as synced
-    if (unsyncedLogs.length > 0) {
-      await db.waterLogs.bulkPut(
-        unsyncedLogs.map((log) => ({ ...log, is_synced: 1 })),
-      )
-    }
+    // // 4. We successfully pushed! Mark our local logs as synced
+    // if (unsyncedLogs.length > 0) {
+    //   await db.waterLogs.bulkPut(
+    //     unsyncedLogs.map((log) => ({ ...log, is_synced: 1 })),
+    //   )
+    // }
 
     // 5. Save incoming changes from OTHER devices into our local Dexie DB
     if (data.changes && data.changes.length > 0) {
       const incomingLogs = data.changes.map((change) => ({
         ...change,
         is_synced: 1, // It came from the server, so it's already synced
-        is_deleted: change.is_deleted ?? false,
       }))
 
       await db.waterLogs.bulkPut(incomingLogs)
