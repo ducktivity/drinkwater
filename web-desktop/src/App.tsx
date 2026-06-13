@@ -11,7 +11,14 @@ import { SettingsSection } from './components/SettingsSection'
 import { ScheduleGoalBanner } from './components/ScheduleGoalBanner'
 import { ScheduleSettings } from './components/ScheduleSettings'
 import { TodayLogList } from './components/TodayLogList'
+import { ReminderSettings } from './components/ReminderSettings'
 import { DEFAULT_SCHEDULE, type ScheduleCheckpoint } from './schedule'
+import {
+  DEFAULT_REMINDER_SETTINGS,
+  createReminderEngine,
+  ensureNotificationPermission,
+  type ReminderSettings as ReminderSettingsValue,
+} from './reminder'
 import { ConfirmLogDialog } from './components/dialogs/ConfirmLogDialog'
 import { DeleteLogDialog } from './components/dialogs/DeleteLogDialog'
 import { EditLogDialog } from './components/dialogs/EditLogDialog'
@@ -29,6 +36,8 @@ interface HydrationUIState {
   fillFraction: number
   /** Timed hydration checkpoints (deadlines + cumulative targets). */
   schedule: ScheduleCheckpoint[]
+  /** Drink-water reminder settings (gentle cadence + force escalation). */
+  reminder: ReminderSettingsValue
   /** The date this state belongs to, as a YYYY-MM-DD key. */
   date: string
 }
@@ -48,16 +57,20 @@ function loadPersistedState(): HydrationUIState {
       // Fall back to the default schedule for state persisted before the
       // schedule feature existed.
       const schedule = parsed.schedule ?? DEFAULT_SCHEDULE
+      // Merge persisted reminder settings over the defaults so state saved
+      // before the reminder feature existed (or missing newer fields) is filled.
+      const reminder = { ...DEFAULT_REMINDER_SETTINGS, ...parsed.reminder }
       // New day — carry forward settings but reset the active bottle to full
       if (parsed.date !== today) {
         return {
           ...parsed,
           schedule,
+          reminder,
           fillFraction: 1,
           date: today,
         }
       }
-      return { ...parsed, schedule }
+      return { ...parsed, schedule, reminder }
     }
   } catch {
     /* Ignore parse errors and fall through to defaults */
@@ -67,6 +80,7 @@ function loadPersistedState(): HydrationUIState {
     goal: 2000,
     fillFraction: 1,
     schedule: DEFAULT_SCHEDULE,
+    reminder: DEFAULT_REMINDER_SETTINGS,
     date: getTodayKey(),
   }
 }
@@ -85,6 +99,8 @@ export default function App() {
   const [schedule, setSchedule] = createStore<ScheduleCheckpoint[]>(
     initialState.schedule,
   )
+  // Drink-water reminder settings (gentle cadence + force escalation).
+  const [reminder, setReminder] = createSignal(initialState.reminder)
 
   // Ticking clock that drives schedule status (next goal / behind warnings).
   // Updated periodically so deadlines flip from "upcoming" to "missed" without
@@ -130,6 +146,7 @@ export default function App() {
         goal: dailyGoal(),
         fillFraction: fillFraction(),
         schedule: schedule,
+        reminder: reminder(),
         date: getTodayKey(),
       }),
     )
@@ -159,6 +176,22 @@ export default function App() {
     )
     return loggedTotal + activeBottleConsumed
   })
+
+  // Wire up the gentle drink-water reminder.
+  createReminderEngine({ settings: reminder })
+
+  /**
+   * Applies a partial change to the reminder settings. When the reminder is
+   * being switched on, requests notification permission so the browser can
+   * surface the nudges.
+   */
+  function handleReminderChange(changes: Partial<ReminderSettingsValue>) {
+    if (changes.enabled) {
+      ensureNotificationPermission().catch(console.error)
+    }
+    setReminder((prev) => ({ ...prev, ...changes }))
+    persistState()
+  }
 
   /** Live drag updates: move the bottle visual only, without touching the daily total. */
   function handleFillFractionChange(newFillFraction: number) {
@@ -385,6 +418,10 @@ export default function App() {
           onRemoveCheckpoint={handleCheckpointRemove}
           onAddCheckpoint={handleCheckpointAdd}
         />
+
+        <div class="w-full h-px bg-white/8" />
+
+        <ReminderSettings settings={reminder} onChange={handleReminderChange} />
       </div>
 
       <TodayLogList
