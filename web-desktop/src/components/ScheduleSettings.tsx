@@ -5,6 +5,7 @@ import {
   type CheckpointStatus,
   type ScheduleCheckpoint,
 } from '../schedule'
+import { NumberInput } from './ui/NumberInput'
 
 interface Props {
   schedule: () => ScheduleCheckpoint[]
@@ -71,22 +72,15 @@ export function ScheduleSettings(props: Props) {
                   })
                 }
               />
-              <div class="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  value={checkpoint.targetMl}
-                  min="100"
-                  max="8000"
-                  step="100"
-                  class="bg-[#222535] border border-white/8 rounded-lg text-[#f0f2f7] text-sm font-medium w-18 py-1.5 px-2.5 text-right outline-none"
-                  onChange={(e) =>
-                    props.onUpdateCheckpoint(checkpoint.id, {
-                      targetMl: parseInt(e.currentTarget.value) || 0,
-                    })
-                  }
-                />
-                <span class="text-[13px] text-[#7a7f96]">ml</span>
-              </div>
+              <NumberInput
+                value={checkpoint.targetMl}
+                step={100}
+                unit="ml"
+                fallback={0}
+                onValueChange={(targetMl) =>
+                  props.onUpdateCheckpoint(checkpoint.id, { targetMl })
+                }
+              />
               <span
                 class={`text-[11px] font-semibold ml-auto ${STATE_STYLES[status()?.state ?? 'upcoming']}`}
               >

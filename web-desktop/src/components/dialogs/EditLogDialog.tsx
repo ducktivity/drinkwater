@@ -1,6 +1,7 @@
 import { createSignal } from 'solid-js'
 import { toTimeInputValue, withTimeOfDay } from '../../utils'
 import type { LocalWaterLog } from '../../db/db'
+import { NumberInput } from '../ui/NumberInput'
 
 interface Props {
   /** The log entry being edited — used to seed the form fields. */
@@ -46,20 +47,14 @@ export function EditLogDialog(props: Props) {
 
           <label class="flex items-center justify-between gap-2.5">
             <span class="text-[13px] text-[#7a7f96]">Amount</span>
-            <div class="flex items-center gap-1.5">
-              <input
-                type="number"
-                value={amountMl()}
-                min="1"
-                max="3000"
-                step="50"
-                class="bg-[#222535] border border-white/8 rounded-lg text-[#f0f2f7] text-sm font-medium w-18 py-1.5 px-2.5 text-right outline-none"
-                onInput={(e) =>
-                  setAmountMl(parseInt(e.currentTarget.value) || 1)
-                }
-              />
-              <span class="text-[13px] text-[#7a7f96]">ml</span>
-            </div>
+            <NumberInput
+              value={amountMl()}
+              step={50}
+              unit="ml"
+              fallback={1}
+              eager
+              onValueChange={setAmountMl}
+            />
           </label>
         </div>
 

@@ -3,6 +3,7 @@ import {
   isNotificationSupported,
   type ReminderSettings as ReminderSettingsValue,
 } from '../reminder'
+import { NumberInput } from './ui/NumberInput'
 import { ToggleSwitch } from './ui/ToggleSwitch'
 
 interface Props {
@@ -34,22 +35,13 @@ export function ReminderSettings(props: Props) {
       <Show when={props.settings().enabled}>
         <div class="flex items-center justify-between gap-2.5 pl-3">
           <span class="text-[13px] text-[#7a7f96]">Every</span>
-          <div class="flex items-center gap-1.5">
-            <input
-              type="number"
-              value={props.settings().intervalMin}
-              min="1"
-              max="240"
-              step="5"
-              class="bg-[#222535] border border-white/8 rounded-lg text-[#f0f2f7] text-sm font-medium w-18 py-1.5 px-2.5 text-right outline-none"
-              onChange={(e) =>
-                props.onChange({
-                  intervalMin: parseInt(e.currentTarget.value) || 60,
-                })
-              }
-            />
-            <span class="text-[13px] text-[#7a7f96]">min</span>
-          </div>
+          <NumberInput
+            value={props.settings().intervalMin}
+            step={5}
+            unit="min"
+            fallback={30}
+            onValueChange={(intervalMin) => props.onChange({ intervalMin })}
+          />
         </div>
       </Show>
     </div>
