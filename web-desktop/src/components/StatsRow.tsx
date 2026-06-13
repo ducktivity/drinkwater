@@ -15,7 +15,7 @@ const renderStatCard = (
   valueClass = 'text-[#f0f2f7]',
 ) => (
   <div class="bg-[#222535] rounded-[10px] py-3 px-2.5 text-center">
-    <div class="text-[11px] text-[#7a7f96] uppercase tracking-[0.5px] mb-1">
+    <div class="flex min-h-[2.4em] items-center justify-center text-[11px] leading-tight text-[#7a7f96] uppercase tracking-[0.5px] mb-1">
       {label}
     </div>
     <div class={`text-lg font-semibold ${valueClass}`}>{value()}</div>
