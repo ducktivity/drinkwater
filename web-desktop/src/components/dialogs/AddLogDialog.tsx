@@ -50,7 +50,9 @@ export function AddLogDialog() {
     <div class="fixed inset-0 bg-black/65 flex items-center justify-center z-100 p-5">
       <div class="bg-[#1a1d26] border border-white/8 rounded-2xl pt-7 px-6 pb-5 max-w-85 w-full">
         <div class="text-[36px] mb-3 text-center">💧</div>
-        <div class="text-[17px] font-semibold mb-1 text-center">Add a log</div>
+        <div class="text-[17px] font-semibold mb-1 text-center text-white">
+          Add a log
+        </div>
         <div class="text-[13px] text-[#7a7f96] mb-5 text-center">
           {formatFullDay(history.selectedDate())}
         </div>
