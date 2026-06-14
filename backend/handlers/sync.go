@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	"log/slog"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -10,6 +10,7 @@ import (
 	"drinkwater-backend/database"
 	"drinkwater-backend/database/dbgen"
 
+	"github.com/go-chi/httplog/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -32,11 +33,14 @@ var dummyUserID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
 func PostSync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Stamp the request-summary line with the acting user so logs can be filtered
+	// per user. Constant for now; ready for when JWT auth replaces dummyUserID.
+	httplog.LogEntrySetFields(ctx, map[string]interface{}{"user_id": dummyUserID.String()})
+
 	// 1. Decode the standard JSON body directly into our API DTO
 	var incomingLogs []api.WaterLog
 	if err := json.NewDecoder(r.Body).Decode(&incomingLogs); err != nil {
-		slog.Error("Failed to decode sync payload", "error", err)
-		http.Error(w, `{"error": "Invalid JSON payload"}`, http.StatusBadRequest)
+		clientError(w, r, http.StatusBadRequest, fmt.Sprintf("decode sync payload: %v", err), `{"error": "Invalid JSON payload"}`)
 		return
 	}
 	defer r.Body.Close()
@@ -47,8 +51,7 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 	// 2. Begin a Database Transaction
 	tx, err := database.DB.Begin(ctx)
 	if err != nil {
-		slog.Error("Failed to begin database transaction", "error", err)
-		http.Error(w, `{"error": "Database connection failed"}`, http.StatusInternalServerError)
+		serverError(w, r, fmt.Errorf("begin sync transaction: %w", err), `{"error": "Database connection failed"}`)
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -68,8 +71,7 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 		})
 
 		if err != nil {
-			slog.Error("Failed to upsert water log", "log_id", log.ID, "error", err)
-			http.Error(w, `{"error": "Failed to save local changes"}`, http.StatusInternalServerError)
+			serverError(w, r, fmt.Errorf("upsert water log %s: %w", log.ID, err), `{"error": "Failed to save local changes"}`)
 			return
 		}
 	}
@@ -82,8 +84,7 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 		// Client provided a sync token, parse it and fetch only new records
 		sinceTime, err := time.Parse(time.RFC3339, sinceStr)
 		if err != nil {
-			slog.Warn("Invalid since timestamp provided", "since", sinceStr)
-			http.Error(w, `{"error": "Invalid since timestamp format"}`, http.StatusBadRequest)
+			clientError(w, r, http.StatusBadRequest, fmt.Sprintf("invalid since timestamp %q", sinceStr), `{"error": "Invalid since timestamp format"}`)
 			return
 		}
 
@@ -92,8 +93,7 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 			ServerUpdatedAt: pgtype.Timestamptz{Time: sinceTime, Valid: true},
 		})
 		if err != nil {
-			slog.Error("Failed to query delta logs", "error", err)
-			http.Error(w, `{"error": "Failed to fetch updates"}`, http.StatusInternalServerError)
+			serverError(w, r, fmt.Errorf("query delta logs: %w", err), `{"error": "Failed to fetch updates"}`)
 			return
 		}
 
@@ -106,16 +106,14 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 		var err error
 		dbLogs, err = qtx.GetAllWaterLogs(ctx, dummyUserID)
 		if err != nil {
-			slog.Error("Failed to query all logs", "error", err)
-			http.Error(w, `{"error": "Failed to fetch full history"}`, http.StatusInternalServerError)
+			serverError(w, r, fmt.Errorf("query all logs: %w", err), `{"error": "Failed to fetch full history"}`)
 			return
 		}
 	}
 
 	// 5. Commit the transaction (All reads and writes succeeded)
 	if err := tx.Commit(ctx); err != nil {
-		slog.Error("Failed to commit sync transaction", "error", err)
-		http.Error(w, `{"error": "Failed to finalize sync transaction"}`, http.StatusInternalServerError)
+		serverError(w, r, fmt.Errorf("commit sync transaction: %w", err), `{"error": "Failed to finalize sync transaction"}`)
 		return
 	}
 

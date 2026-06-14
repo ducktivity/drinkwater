@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"time"
@@ -11,6 +12,15 @@ import (
 
 // DB holds our connection pool global instance
 var DB *pgxpool.Pool
+
+// Ping verifies the database is reachable. It backs the /readyz readiness probe,
+// so callers should pass a short-deadline context to keep the probe responsive.
+func Ping(ctx context.Context) error {
+	if DB == nil {
+		return errors.New("database pool not initialized")
+	}
+	return DB.Ping(ctx)
+}
 
 func Connect() {
 	// Coolify will inject the database connection string via this environment variable

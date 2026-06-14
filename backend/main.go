@@ -1,59 +1,210 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"runtime/debug"
+	"syscall"
+	"time"
 
 	"drinkwater-backend/database"
 	"drinkwater-backend/handlers"
 
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/httplog/v2"
 	"github.com/joho/godotenv"
 )
+
+// Build information. Set at release time via the linker:
+//
+//	go build -ldflags "-X main.version=1.2.3 -X main.commit=$(git rev-parse HEAD)"
+//
+// When built without ldflags (local `go run`, `air`), resolveBuildInfo() fills
+// these from the embedded VCS stamp so logs/Sentry still carry a commit.
+var (
+	version   = ""
+	commit    = ""
+	buildTime = ""
+)
+
+// config holds the runtime configuration sourced from environment variables.
+type config struct {
+	env       string     // ENV: prod | staging | development; tags every log + Sentry event
+	port      string     // PORT: TCP port to listen on
+	logLevel  slog.Level // LOG_LEVEL: debug | info | warn | error
+	logJSON   bool       // LOG_FORMAT: "json" (prod) or "text" (local dev pretty output)
+	sentryDSN string     // SENTRY_DSN: empty disables Sentry (no-op) for local dev
+}
+
+func loadConfig() config {
+	return config{
+		env:       getenv("ENV", "development"),
+		port:      getenv("PORT", "8080"),
+		logLevel:  httplog.LevelByName(getenv("LOG_LEVEL", "info")),
+		logJSON:   getenv("LOG_FORMAT", "json") == "json",
+		sentryDSN: os.Getenv("SENTRY_DSN"),
+	}
+}
+
+func getenv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
 
 // @title Drinkwater Sync API
 // @version 1.0
 // @description Local-first sync engine.
 // @BasePath /
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	slog.SetDefault(logger)
+	resolveBuildInfo()
+	cfg := loadConfig()
+
+	// One logger powers everything: httplog uses it for per-request summaries,
+	// and slog.SetDefault routes startup/shutdown/DB logs through the same
+	// JSON-to-stdout pipeline. Concise mode emits exactly one summary line per
+	// request (no separate request/response pair) to keep log volume — and the
+	// BetterStack bill — minimal.
+	logger := httplog.NewLogger("drinkwater-backend", httplog.Options{
+		JSON:             cfg.logJSON,
+		LogLevel:         cfg.logLevel,
+		Concise:          true,
+		MessageFieldName: "msg",
+		// Health probes are hit constantly by the deploy agent and uptime
+		// monitor; quiet them so they don't drown the logs.
+		QuietDownRoutes: []string{"/healthz", "/readyz", "/health"},
+		QuietDownPeriod: 10 * time.Second,
+	})
+	// Base attributes ride on every line (request summaries, startup, DB) so a
+	// log aggregator can filter by env/version/commit/pid. We attach them here
+	// rather than via httplog's Tags option, which it drops in Concise mode.
+	logger.Logger = logger.Logger.With(
+		"env", cfg.env,
+		"version", version,
+		"commit", shortCommit(commit),
+		"pid", os.Getpid(),
+	)
+	slog.SetDefault(logger.Logger)
 
 	godotenv.Load()
 	database.Connect()
 
-	// Initialize Chi router
+	// Sentry captures stack traces, groups errors, and alerts. With an empty DSN
+	// it is a no-op, so local dev needs no Sentry account.
+	if cfg.sentryDSN != "" {
+		if err := sentry.Init(sentry.ClientOptions{
+			Dsn:              cfg.sentryDSN,
+			Environment:      cfg.env,
+			Release:          version + "+" + shortCommit(commit),
+			AttachStacktrace: true,
+			EnableTracing:    false, // errors only; we run no tracing backend
+		}); err != nil {
+			slog.Error("sentry init failed", "error", err)
+		} else {
+			defer sentry.Flush(2 * time.Second)
+		}
+	}
+
 	router := chi.NewRouter()
 
-	// Add standard standard middleware
+	// Middleware order is outer -> inner. RequestID/RealIP feed httplog and
+	// Sentry; httplog wraps everything so it records the final status (incl. the
+	// 500 written by Recoverer). Sentry sits inside Recoverer with Repanic:true
+	// so a panic is captured-with-stacktrace and then re-panicked up to Recoverer,
+	// which turns it into a clean 500.
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
-	router.Use(middleware.Logger)
+	router.Use(httplog.RequestLogger(logger))
 	router.Use(middleware.Recoverer)
+	router.Use(sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle)
 
-	// Configure CORS for SolidJS and Tauri
 	router.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"http://localhost:5173", "tauri://localhost"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}))
 
-	// Routes
-	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Drinkwater Chi server is healthy"))
-	})
+	// Liveness vs readiness: /healthz proves the process runs; /readyz proves it
+	// can reach NeonDB (the deploy agent gates blue-green cutover on it).
+	router.Get("/healthz", handlers.Healthz)
+	router.Get("/readyz", handlers.Readyz)
+	router.Get("/health", handlers.Healthz) // legacy alias
 
 	router.Post("/sync", handlers.PostSync)
 	router.Get("/logs", handlers.GetLogs)
 
-	slog.Info("Starting Drinkwater server", "port", 8080)
-	if err := http.ListenAndServe(":8080", router); err != nil {
-		slog.Error("server startup failed", "error", err)
-		os.Exit(1)
+	// Cancel the base context on SIGINT/SIGTERM so the server drains in-flight
+	// requests cleanly during a blue-green cutover instead of dropping them.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	srv := &http.Server{Addr: ":" + cfg.port, Handler: router}
+
+	go func() {
+		slog.Info("starting Drinkwater server", "port", cfg.port, "env", cfg.env, "version", version, "commit", shortCommit(commit))
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("server failed", "error", err)
+			stop() // unblock main so the process exits non-zero path below
+		}
+	}()
+
+	<-ctx.Done()
+	stop()
+	slog.Info("shutdown signal received, draining connections")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("graceful shutdown failed", "error", err)
 	}
+	database.DB.Close()
+	slog.Info("server stopped")
+}
+
+// resolveBuildInfo backfills empty ldflags-injected build vars from the Go
+// toolchain's embedded VCS stamp, so a binary built with a plain `go build`
+// still reports its commit and dirtiness.
+func resolveBuildInfo() {
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+	if version == "" {
+		version = bi.Main.Version // e.g. "(devel)" for local builds
+	}
+	for _, s := range bi.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			if commit == "" {
+				commit = s.Value
+			}
+		case "vcs.time":
+			if buildTime == "" {
+				buildTime = s.Value
+			}
+		}
+	}
+	if version == "" {
+		version = "dev"
+	}
+	if commit == "" {
+		commit = "unknown"
+	}
+}
+
+// shortCommit trims a git SHA to its first 12 characters for readable logs.
+func shortCommit(c string) string {
+	if len(c) > 12 {
+		return c[:12]
+	}
+	return c
 }

@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	"log/slog"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -10,6 +10,7 @@ import (
 	"drinkwater-backend/database"
 	"drinkwater-backend/database/dbgen"
 
+	"github.com/go-chi/httplog/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -27,26 +28,27 @@ import (
 func GetLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Stamp the request-summary line with the acting user (constant for now).
+	httplog.LogEntrySetFields(ctx, map[string]interface{}{"user_id": dummyUserID.String()})
+
 	// 1. Parse the half-open [from, to) range from the query string. Both bounds
 	// are required so the query is always scoped to a single day.
 	fromStr := r.URL.Query().Get("from")
 	toStr := r.URL.Query().Get("to")
 	if fromStr == "" || toStr == "" {
-		http.Error(w, `{"error": "Both 'from' and 'to' timestamps are required"}`, http.StatusBadRequest)
+		clientError(w, r, http.StatusBadRequest, "missing 'from' or 'to' timestamp", `{"error": "Both 'from' and 'to' timestamps are required"}`)
 		return
 	}
 
 	fromTime, err := time.Parse(time.RFC3339, fromStr)
 	if err != nil {
-		slog.Warn("Invalid 'from' timestamp provided", "from", fromStr)
-		http.Error(w, `{"error": "Invalid 'from' timestamp format"}`, http.StatusBadRequest)
+		clientError(w, r, http.StatusBadRequest, fmt.Sprintf("invalid 'from' timestamp %q", fromStr), `{"error": "Invalid 'from' timestamp format"}`)
 		return
 	}
 
 	toTime, err := time.Parse(time.RFC3339, toStr)
 	if err != nil {
-		slog.Warn("Invalid 'to' timestamp provided", "to", toStr)
-		http.Error(w, `{"error": "Invalid 'to' timestamp format"}`, http.StatusBadRequest)
+		clientError(w, r, http.StatusBadRequest, fmt.Sprintf("invalid 'to' timestamp %q", toStr), `{"error": "Invalid 'to' timestamp format"}`)
 		return
 	}
 
@@ -57,8 +59,7 @@ func GetLogs(w http.ResponseWriter, r *http.Request) {
 		LoggedAt_2: pgtype.Timestamptz{Time: toTime, Valid: true},
 	})
 	if err != nil {
-		slog.Error("Failed to query logs in range", "error", err)
-		http.Error(w, `{"error": "Failed to fetch logs"}`, http.StatusInternalServerError)
+		serverError(w, r, fmt.Errorf("query logs in range: %w", err), `{"error": "Failed to fetch logs"}`)
 		return
 	}
 
