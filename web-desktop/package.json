@@ -8,8 +8,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint . --max-warnings 0",
-    "format": "pretty-quick",
-    "check": "pnpm run typecheck && pnpm run lint",
+    "check": "pnpm run typecheck && pnpm run lint && pretty-quick",
     "generate-types": "swagger2openapi ../shared-schemas/swagger.json -o ../shared-schemas/openapi.json && openapi-typescript ../shared-schemas/openapi.json -o src/types/schema.d.ts",
     "preview": "vite preview"
   },
