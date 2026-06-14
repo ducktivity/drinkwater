@@ -14,6 +14,7 @@ import { cleanupSyncedStaleLogs } from './db/cleanup'
 import { fetchLogsForDate } from './db/history'
 import {
   getTodayKey,
+  toDateKey,
   toTimeInputValue,
   formatFullDay,
   compareLoggedAtDesc,
@@ -186,7 +187,7 @@ export default function App() {
   const todayLogs = createMemo(() => {
     const today = getTodayKey()
     return waterLogs()
-      .filter((log) => log.logged_at.substring(0, 10) === today)
+      .filter((log) => toDateKey(new Date(log.logged_at)) === today)
       .sort(compareLoggedAtDesc)
   })
 

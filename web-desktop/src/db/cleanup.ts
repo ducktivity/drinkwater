@@ -1,5 +1,5 @@
 import { db } from './db'
-import { getTodayKey } from '../utils'
+import { getTodayKey, toDateKey } from '../utils'
 
 /**
  * Prunes stale water logs from the local IndexedDB store.
@@ -23,12 +23,13 @@ export async function cleanupSyncedStaleLogs(): Promise<number> {
   const today = getTodayKey()
 
   // Narrow to synced logs via the is_synced index, then drop anything not from
-  // today. Date comparison uses the YYYY-MM-DD prefix of the local-day key the
-  // rest of the app relies on, matching how todayLogs filters in App.tsx.
+  // today. The day is derived by parsing the timestamp to its local calendar day
+  // (not by slicing the ISO prefix), so UTC-stored logs near midnight aren't
+  // misclassified — matching how todayLogs filters in App.tsx.
   const staleIds = await db.waterLogs
     .where('is_synced')
     .equals(1)
-    .filter((log) => log.logged_at.substring(0, 10) !== today)
+    .filter((log) => toDateKey(new Date(log.logged_at)) !== today)
     .primaryKeys()
 
   if (staleIds.length === 0) return 0

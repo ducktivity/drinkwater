@@ -66,9 +66,11 @@ func GetLogs(w http.ResponseWriter, r *http.Request) {
 	logs := make([]api.WaterLog, 0, len(dbLogs))
 	for _, dbLog := range dbLogs {
 		logs = append(logs, api.WaterLog{
-			ID:        dbLog.ID,
-			AmountMl:  dbLog.AmountMl,
-			LoggedAt:  dbLog.LoggedAt.Time,
+			ID:       dbLog.ID,
+			AmountMl: dbLog.AmountMl,
+			// Always emit UTC so the wire format is canonical ("...Z"), matching
+			// the client and keeping the same instant byte-identical everywhere.
+			LoggedAt:  dbLog.LoggedAt.Time.UTC(),
 			IsDeleted: dbLog.IsDeleted,
 		})
 	}

@@ -123,9 +123,11 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 	var outgoingLogs []api.WaterLog
 	for _, dbLog := range dbLogs {
 		outgoingLogs = append(outgoingLogs, api.WaterLog{
-			ID:        dbLog.ID,
-			AmountMl:  dbLog.AmountMl,
-			LoggedAt:  dbLog.LoggedAt.Time,
+			ID:       dbLog.ID,
+			AmountMl: dbLog.AmountMl,
+			// Always emit UTC so the wire format is canonical ("...Z"), matching
+			// the client and keeping the same instant byte-identical everywhere.
+			LoggedAt:  dbLog.LoggedAt.Time.UTC(),
 			IsDeleted: dbLog.IsDeleted,
 		})
 	}
