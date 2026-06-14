@@ -4,16 +4,12 @@ import {
   toTimeInputValue,
   formatFullDay,
 } from '../../utils'
+import { db, type LocalWaterLog } from '../../db/db'
+import { syncEngine } from '../../db/sync'
+import { useOverlay } from '../../context/OverlayContext'
+import { useHistory } from '../../context/HistoryContext'
 import { NumberInput } from '../ui/NumberInput'
 import { TimeInput } from '../ui/TimeInput'
-
-interface Props {
-  /** The day to attach the new log to, as a YYYY-MM-DD key. */
-  dateKey: string
-  /** Called with the new amount (ml) and composed ISO timestamp when saved. */
-  onSave: (changes: { amount_ml: number; logged_at: string }) => void
-  onCancel: () => void
-}
 
 /** Default fill for a forgotten log the user is back-filling, in millilitres. */
 const DEFAULT_AMOUNT_ML = 250
@@ -23,18 +19,31 @@ const DEFAULT_AMOUNT_ML = 250
  * record. Mirrors EditLogDialog's layout but composes a brand-new entry on the
  * selected calendar day from the chosen time-of-day and amount.
  */
-export function AddLogDialog(props: Props) {
+export function AddLogDialog() {
+  const overlay = useOverlay()
+  const history = useHistory()
   const [amountMl, setAmountMl] = createSignal(DEFAULT_AMOUNT_ML)
   // Seed the time with the current clock time as a sensible starting point.
   const [timeValue, setTimeValue] = createSignal(
     toTimeInputValue(new Date().toISOString()),
   )
 
-  function handleSave() {
-    props.onSave({
+  /**
+   * Adds a back-filled log to the selected (past) day: writes a new unsynced
+   * entry to IndexedDB, reflects it in the history list, and kicks off a sync.
+   */
+  async function handleSave() {
+    const newLog: LocalWaterLog = {
+      id: crypto.randomUUID(),
       amount_ml: amountMl(),
-      logged_at: isoFromDateAndTime(props.dateKey, timeValue()),
-    })
+      logged_at: isoFromDateAndTime(history.selectedDate(), timeValue()),
+      is_deleted: false,
+      is_synced: 0,
+    }
+    await db.waterLogs.add(newLog)
+    history.syncHistoryView(newLog)
+    overlay.setIsAddingLog(false)
+    syncEngine().catch(console.error)
   }
 
   return (
@@ -43,7 +52,7 @@ export function AddLogDialog(props: Props) {
         <div class="text-[36px] mb-3 text-center">💧</div>
         <div class="text-[17px] font-semibold mb-1 text-center">Add a log</div>
         <div class="text-[13px] text-[#7a7f96] mb-5 text-center">
-          {formatFullDay(props.dateKey)}
+          {formatFullDay(history.selectedDate())}
         </div>
 
         <div class="flex flex-col gap-3 mb-5">
@@ -68,7 +77,7 @@ export function AddLogDialog(props: Props) {
         <div class="flex gap-2.5">
           <button
             class="flex-1 py-2.75 rounded-[10px] border-0 text-sm font-semibold cursor-pointer bg-[#222535] text-[#f0f2f7]"
-            onClick={props.onCancel}
+            onClick={() => overlay.setIsAddingLog(false)}
           >
             Cancel
           </button>

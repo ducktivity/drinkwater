@@ -7,19 +7,15 @@ import {
 } from 'solid-js'
 import { db, type LocalWaterLog } from '../db/db'
 import { syncEngine } from '../db/sync'
-import { toTimeInputValue } from '../utils'
 import { savePersistedState } from '../state/persistence'
 import { useSettings } from './SettingsContext'
 import { useHydration } from './HydrationContext'
-import { useHistory } from './HistoryContext'
 
-/** Payload shared by the edit/add dialogs when saving a log. */
-interface LogChanges {
-  amount_ml: number
-  logged_at: string
-}
-
-/** UI overlay state: the four dialogs' visibility and their save handlers. */
+/**
+ * UI overlay state: the four dialogs' visibility (and the entity each acts on).
+ * Each dialog owns its own save/confirm logic; the context only holds the shared
+ * state and the bottle-flow handlers that open/resolve the confirm dialog.
+ */
 interface OverlayContextValue {
   /** Whether the confirm-drink dialog is open. */
   isConfirmVisible: Accessor<boolean>
@@ -42,12 +38,6 @@ interface OverlayContextValue {
   handleLogConfirm: () => Promise<void>
   /** Dismisses the confirm dialog and restores the bottle to its prior level. */
   handleLogCancel: () => void
-  /** Soft-deletes the pending log entry and kicks off a background sync. */
-  handleDeleteConfirm: () => Promise<void>
-  /** Persists edits to a log entry and kicks off a background sync. */
-  handleEditSave: (changes: LogChanges) => Promise<void>
-  /** Adds a back-filled log to the selected (past) day and kicks off a sync. */
-  handleAddLogSave: (changes: LogChanges) => Promise<void>
 }
 
 const OverlayContext = createContext<OverlayContextValue>()
@@ -56,7 +46,6 @@ const OverlayContext = createContext<OverlayContextValue>()
 export function OverlayProvider(props: ParentProps) {
   const settings = useSettings()
   const hydration = useHydration()
-  const history = useHistory()
 
   const [isConfirmVisible, setIsConfirmVisible] = createSignal(false)
   // Millilitres the confirm dialog will commit when accepted. This is the full
@@ -130,71 +119,6 @@ export function OverlayProvider(props: ParentProps) {
     savePersistedState({ fillFraction: fillToRestoreOnCancel() })
   }
 
-  /**
-   * Soft-deletes the pending log entry: flags it as deleted and unsynced in
-   * IndexedDB, then kicks off a background sync to propagate to the backend.
-   */
-  async function handleDeleteConfirm() {
-    const log = logPendingDeletion()
-    if (!log) return
-    // Upsert the full record (rather than update by id): a historical log fetched
-    // from the backend may not exist in IndexedDB yet, so we must write it in full
-    // — flagged deleted and unsynced — for the soft-delete to propagate on sync.
-    const deleted: LocalWaterLog = { ...log, is_deleted: true, is_synced: 0 }
-    await db.waterLogs.put(deleted)
-    history.syncHistoryView(deleted)
-    setLogPendingDeletion(null)
-    syncEngine().catch(console.error)
-  }
-
-  /**
-   * Persists edits to a log entry: updates the amount and timestamp, flags it
-   * as unsynced in IndexedDB, then kicks off a background sync to the backend.
-   */
-  async function handleEditSave(changes: LogChanges) {
-    const log = logBeingEdited()
-    if (!log) return
-
-    // Nothing changed — close the dialog without touching the sync state.
-    // Timestamps are compared at local minute granularity (matching the time
-    // input's precision) so equivalent instants in different ISO formats
-    // (e.g. "...Z" vs "...+08:00") don't register as a spurious change.
-    const isUnchanged =
-      changes.amount_ml === log.amount_ml &&
-      toTimeInputValue(changes.logged_at) === toTimeInputValue(log.logged_at)
-    if (isUnchanged) {
-      setLogBeingEdited(null)
-      return
-    }
-
-    // Upsert the full record: a historical log fetched from the backend may not
-    // be present in IndexedDB, so writing it in full (rather than update-by-id)
-    // ensures the edit is persisted and queued for sync in both cases.
-    const updated: LocalWaterLog = { ...log, ...changes, is_synced: 0 }
-    await db.waterLogs.put(updated)
-    history.syncHistoryView(updated)
-    setLogBeingEdited(null)
-    syncEngine().catch(console.error)
-  }
-
-  /**
-   * Adds a back-filled log to the selected (past) day: writes a new unsynced
-   * entry to IndexedDB, reflects it in the history list, and kicks off a sync.
-   */
-  async function handleAddLogSave(changes: LogChanges) {
-    const newLog: LocalWaterLog = {
-      id: crypto.randomUUID(),
-      amount_ml: changes.amount_ml,
-      logged_at: changes.logged_at,
-      is_deleted: false,
-      is_synced: 0,
-    }
-    await db.waterLogs.add(newLog)
-    history.syncHistoryView(newLog)
-    setIsAddingLog(false)
-    syncEngine().catch(console.error)
-  }
-
   const value: OverlayContextValue = {
     isConfirmVisible,
     pendingLogMl,
@@ -208,9 +132,6 @@ export function OverlayProvider(props: ParentProps) {
     handleLogDrank,
     handleLogConfirm,
     handleLogCancel,
-    handleDeleteConfirm,
-    handleEditSave,
-    handleAddLogSave,
   }
 
   return (

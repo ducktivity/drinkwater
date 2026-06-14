@@ -6,7 +6,7 @@ import {
 } from '../reminder'
 
 /** localStorage key used to persist UI state between sessions. */
-const HYDRATION_STORAGE_KEY = 'drinkwater_v1'
+const HYDRATION_STORAGE_KEY = 'drinkwater_ui'
 
 /** Shape of the persisted UI state stored in localStorage. */
 export interface HydrationUIState {

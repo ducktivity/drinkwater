@@ -1,14 +1,16 @@
 import { Show } from 'solid-js'
-import { useHistory } from '../context/HistoryContext'
 import { useOverlay } from '../context/OverlayContext'
 import { ConfirmLogDialog } from './dialogs/ConfirmLogDialog'
 import { DeleteLogDialog } from './dialogs/DeleteLogDialog'
 import { EditLogDialog } from './dialogs/EditLogDialog'
 import { AddLogDialog } from './dialogs/AddLogDialog'
 
-/** Renders the four modal dialogs, driven by the overlay context state. */
+/**
+ * Renders the four modal dialogs, gated by the overlay context's visibility
+ * state. Each dialog owns its own save/confirm logic and pulls what it needs
+ * from context; this component only decides which ones are mounted.
+ */
 export function AppDialogs() {
-  const history = useHistory()
   const overlay = useOverlay()
 
   return (
@@ -22,31 +24,15 @@ export function AppDialogs() {
       </Show>
 
       <Show when={overlay.logBeingEdited()}>
-        {(log) => (
-          <EditLogDialog
-            log={log()}
-            onSave={overlay.handleEditSave}
-            onCancel={() => overlay.setLogBeingEdited(null)}
-          />
-        )}
+        {(log) => <EditLogDialog log={log()} />}
       </Show>
 
       <Show when={overlay.logPendingDeletion()}>
-        {(log) => (
-          <DeleteLogDialog
-            log={log()}
-            onConfirm={overlay.handleDeleteConfirm}
-            onCancel={() => overlay.setLogPendingDeletion(null)}
-          />
-        )}
+        {(log) => <DeleteLogDialog log={log()} />}
       </Show>
 
       <Show when={overlay.isAddingLog()}>
-        <AddLogDialog
-          dateKey={history.selectedDate()}
-          onSave={overlay.handleAddLogSave}
-          onCancel={() => overlay.setIsAddingLog(false)}
-        />
+        <AddLogDialog />
       </Show>
     </>
   )
