@@ -33,7 +33,9 @@ export function EditLogDialog(props: Props) {
     <div class="fixed inset-0 bg-black/65 flex items-center justify-center z-100 p-5">
       <div class="bg-[#1a1d26] border border-white/8 rounded-2xl pt-7 px-6 pb-5 max-w-85 w-full">
         <div class="text-[36px] mb-3 text-center">✏️</div>
-        <div class="text-[17px] font-semibold mb-5 text-center">Edit log</div>
+        <div class="text-[17px] font-semibold mb-5 text-center text-white">
+          Edit log
+        </div>
 
         <div class="flex flex-col gap-3 mb-5">
           <label class="flex items-center justify-between gap-2.5">

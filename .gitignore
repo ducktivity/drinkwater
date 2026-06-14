@@ -23,4 +23,4 @@ mobile/.flutter-plugins-dependencies
 .env
 AGENTS.md
 CLAUDE.md
-context/
+.agent/
