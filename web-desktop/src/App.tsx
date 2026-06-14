@@ -1,16 +1,30 @@
-import { createSignal, createMemo, onMount, onCleanup, Show } from 'solid-js'
+import {
+  createSignal,
+  createMemo,
+  createEffect,
+  onMount,
+  onCleanup,
+  Show,
+} from 'solid-js'
 import { createStore } from 'solid-js/store'
 import { liveQuery } from 'dexie'
 import { db, type LocalWaterLog } from './db/db'
 import { syncEngine } from './db/sync'
 import { cleanupSyncedStaleLogs } from './db/cleanup'
-import { getTodayKey, toTimeInputValue } from './utils'
+import { fetchLogsForDate } from './db/history'
+import {
+  getTodayKey,
+  toTimeInputValue,
+  formatFullDay,
+  compareLoggedAtDesc,
+} from './utils'
 import { StatsRow } from './components/StatsRow'
 import { BottleSection } from './components/BottleSection'
 import { SettingsSection } from './components/SettingsSection'
 import { ScheduleGoalBanner } from './components/ScheduleGoalBanner'
 import { ScheduleSettings } from './components/ScheduleSettings'
-import { TodayLogList } from './components/TodayLogList'
+import { DateNavigator } from './components/DateNavigator'
+import { LogList } from './components/LogList'
 import { ReminderSettings } from './components/ReminderSettings'
 import { DEFAULT_SCHEDULE, type ScheduleCheckpoint } from './schedule'
 import {
@@ -22,6 +36,7 @@ import {
 import { ConfirmLogDialog } from './components/dialogs/ConfirmLogDialog'
 import { DeleteLogDialog } from './components/dialogs/DeleteLogDialog'
 import { EditLogDialog } from './components/dialogs/EditLogDialog'
+import { AddLogDialog } from './components/dialogs/AddLogDialog'
 
 /** localStorage key used to persist UI state between sessions. */
 const HYDRATION_STORAGE_KEY = 'wt_v2'
@@ -137,6 +152,19 @@ export default function App() {
   // Live water logs from the local IndexedDB database
   const [waterLogs, setWaterLogs] = createSignal<LocalWaterLog[]>([])
 
+  // History view state ─────────────────────────────────────────────────────
+  // The day currently being viewed, as a YYYY-MM-DD key. Defaults to today.
+  const [selectedDate, setSelectedDate] = createSignal(getTodayKey())
+  // Logs fetched for a past day (today's logs come from the live query instead).
+  const [historyLogs, setHistoryLogs] = createSignal<LocalWaterLog[]>([])
+  // Whether a past day's logs are currently being fetched from the backend.
+  const [isLoadingHistory, setIsLoadingHistory] = createSignal(false)
+  // Whether the "add a past log" dialog is open.
+  const [isAddingLog, setIsAddingLog] = createSignal(false)
+
+  /** Whether the user is viewing today (vs. a historical day). */
+  const isViewingToday = () => selectedDate() === getTodayKey()
+
   /** Persists the current UI state snapshot to localStorage. */
   function persistState() {
     localStorage.setItem(
@@ -159,7 +187,7 @@ export default function App() {
     const today = getTodayKey()
     return waterLogs()
       .filter((log) => log.logged_at.substring(0, 10) === today)
-      .sort((a, b) => b.logged_at.localeCompare(a.logged_at))
+      .sort(compareLoggedAtDesc)
   })
 
   /**
@@ -176,6 +204,63 @@ export default function App() {
     )
     return loggedTotal + activeBottleConsumed
   })
+
+  /** The log entries shown in the list: today's live logs, or a fetched past day. */
+  const displayedLogs = createMemo(() =>
+    isViewingToday() ? todayLogs() : historyLogs(),
+  )
+
+  /**
+   * Total millilitres for the selected day. Today reuses the live total (which
+   * folds in the active bottle); past days sum their fetched logs.
+   */
+  const selectedDayTotalMl = createMemo(() =>
+    isViewingToday()
+      ? totalMlConsumedToday()
+      : historyLogs().reduce((sum, log) => sum + log.amount_ml, 0),
+  )
+
+  /**
+   * Fetches a past day's logs whenever the user navigates to one, with a loading
+   * state. Today needs no fetch — its logs come live from IndexedDB. The selected
+   * date is re-checked in each callback so a slow fetch can't clobber a newer
+   * selection (race guard).
+   */
+  createEffect(() => {
+    const date = selectedDate()
+    if (date === getTodayKey()) {
+      setHistoryLogs([])
+      setIsLoadingHistory(false)
+      return
+    }
+    setIsLoadingHistory(true)
+    fetchLogsForDate(date)
+      .then((logs) => {
+        if (selectedDate() === date) setHistoryLogs(logs)
+      })
+      .catch((err) => {
+        console.error(err)
+        if (selectedDate() === date) setHistoryLogs([])
+      })
+      .finally(() => {
+        if (selectedDate() === date) setIsLoadingHistory(false)
+      })
+  })
+
+  /**
+   * Reflects a mutated log in the history list so past-day edits/additions show
+   * immediately, without waiting for a re-fetch. A no-op when viewing today,
+   * where the live query already drives the list. Deletions drop the entry;
+   * edits and additions upsert it, keeping the list sorted most-recent-first.
+   */
+  function syncHistoryView(changed: LocalWaterLog) {
+    if (isViewingToday()) return
+    setHistoryLogs((prev) => {
+      const without = prev.filter((log) => log.id !== changed.id)
+      if (changed.is_deleted) return without
+      return [...without, changed].sort(compareLoggedAtDesc)
+    })
+  }
 
   // Wire up the gentle drink-water reminder.
   createReminderEngine({ settings: reminder })
@@ -259,7 +344,12 @@ export default function App() {
   async function handleDeleteConfirm() {
     const log = logPendingDeletion()
     if (!log) return
-    await db.waterLogs.update(log.id, { is_deleted: true, is_synced: 0 })
+    // Upsert the full record (rather than update by id): a historical log fetched
+    // from the backend may not exist in IndexedDB yet, so we must write it in full
+    // — flagged deleted and unsynced — for the soft-delete to propagate on sync.
+    const deleted: LocalWaterLog = { ...log, is_deleted: true, is_synced: 0 }
+    await db.waterLogs.put(deleted)
+    syncHistoryView(deleted)
     setLogPendingDeletion(null)
     syncEngine().catch(console.error)
   }
@@ -287,8 +377,34 @@ export default function App() {
       return
     }
 
-    await db.waterLogs.update(log.id, { ...changes, is_synced: 0 })
+    // Upsert the full record: a historical log fetched from the backend may not
+    // be present in IndexedDB, so writing it in full (rather than update-by-id)
+    // ensures the edit is persisted and queued for sync in both cases.
+    const updated: LocalWaterLog = { ...log, ...changes, is_synced: 0 }
+    await db.waterLogs.put(updated)
+    syncHistoryView(updated)
     setLogBeingEdited(null)
+    syncEngine().catch(console.error)
+  }
+
+  /**
+   * Adds a back-filled log to the selected (past) day: writes a new unsynced
+   * entry to IndexedDB, reflects it in the history list, and kicks off a sync.
+   */
+  async function handleAddLogSave(changes: {
+    amount_ml: number
+    logged_at: string
+  }) {
+    const newLog: LocalWaterLog = {
+      id: crypto.randomUUID(),
+      amount_ml: changes.amount_ml,
+      logged_at: changes.logged_at,
+      is_deleted: false,
+      is_synced: 0,
+    }
+    await db.waterLogs.add(newLog)
+    syncHistoryView(newLog)
+    setIsAddingLog(false)
     syncEngine().catch(console.error)
   }
 
@@ -362,31 +478,30 @@ export default function App() {
     })
   })
 
-  const todayDisplayString = new Date().toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'long',
-  })
-
   return (
     <div class="min-h-screen bg-[#0f1117] text-[#f0f2f7] font-sans flex flex-col items-center px-4 pt-6 pb-10">
-      <header class="w-full max-w-105 mb-7">
-        <div class="text-xl font-semibold tracking-tight">Hydration</div>
-        <div class="text-[13px] text-[#7a7f96]">{todayDisplayString}</div>
-      </header>
-
       <div class="w-full max-w-105 bg-[#1a1d26] border border-white/8 rounded-2xl pt-7 px-6 pb-6 flex flex-col items-center gap-6">
-        <StatsRow totalMl={totalMlConsumedToday} goal={dailyGoal} />
+        <DateNavigator selectedDate={selectedDate} onSelect={setSelectedDate} />
 
-        <ScheduleGoalBanner
-          schedule={() => schedule}
-          totalMl={totalMlConsumedToday}
-          now={now}
-        />
+        <div class="w-full h-px bg-white/8" />
 
+        <StatsRow totalMl={selectedDayTotalMl} goal={dailyGoal} />
+
+        {/* The next-goal banner only applies to the live day. */}
+        <Show when={isViewingToday()}>
+          <ScheduleGoalBanner
+            schedule={() => schedule}
+            totalMl={totalMlConsumedToday}
+            now={now}
+          />
+        </Show>
+
+        {/* On a past day the bottle is a static, full visual (non-interactive),
+            since dragging it would log against today, not the day being viewed. */}
         <BottleSection
           size={bottleSize}
-          fillFraction={fillFraction}
+          fillFraction={() => (isViewingToday() ? fillFraction() : 1)}
+          interactive={isViewingToday}
           onFillFractionChange={handleFillFractionChange}
           onBottleEmptied={handleBottleEmptied}
           onDragSettled={handleDragSettled}
@@ -408,26 +523,38 @@ export default function App() {
           }}
         />
 
-        <div class="w-full h-px bg-white/8" />
+        {/* Schedule and reminder settings are irrelevant when reviewing a past
+            day, so they're hidden unless today is selected. */}
+        <Show when={isViewingToday()}>
+          <div class="w-full h-px bg-white/8" />
 
-        <ScheduleSettings
-          schedule={() => schedule}
-          totalMl={totalMlConsumedToday}
-          now={now}
-          onUpdateCheckpoint={handleCheckpointUpdate}
-          onRemoveCheckpoint={handleCheckpointRemove}
-          onAddCheckpoint={handleCheckpointAdd}
-        />
+          <ScheduleSettings
+            schedule={() => schedule}
+            totalMl={totalMlConsumedToday}
+            now={now}
+            onUpdateCheckpoint={handleCheckpointUpdate}
+            onRemoveCheckpoint={handleCheckpointRemove}
+            onAddCheckpoint={handleCheckpointAdd}
+          />
 
-        <div class="w-full h-px bg-white/8" />
+          <div class="w-full h-px bg-white/8" />
 
-        <ReminderSettings settings={reminder} onChange={handleReminderChange} />
+          <ReminderSettings
+            settings={reminder}
+            onChange={handleReminderChange}
+          />
+        </Show>
       </div>
 
-      <TodayLogList
-        logs={todayLogs}
+      <LogList
+        title={
+          isViewingToday() ? "Today's Progress" : formatFullDay(selectedDate())
+        }
+        logs={displayedLogs}
         onEdit={setLogBeingEdited}
         onDelete={setLogPendingDeletion}
+        onAdd={isViewingToday() ? undefined : () => setIsAddingLog(true)}
+        isLoading={isLoadingHistory}
       />
 
       <Show when={isConfirmVisible()}>
@@ -456,6 +583,14 @@ export default function App() {
             onCancel={() => setLogPendingDeletion(null)}
           />
         )}
+      </Show>
+
+      <Show when={isAddingLog()}>
+        <AddLogDialog
+          dateKey={selectedDate()}
+          onSave={handleAddLogSave}
+          onCancel={() => setIsAddingLog(false)}
+        />
       </Show>
     </div>
   )

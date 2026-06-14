@@ -1,7 +1,52 @@
+/**
+ * Comparator that orders log entries most-recent-first by their actual instant.
+ * Compares parsed timestamps rather than the raw ISO strings, so entries stay
+ * correctly ordered even when timestamps arrive in mixed formats — e.g. the
+ * backend's timezone-offset form ("…+08:00") alongside the client's UTC "Z"
+ * form. Plain string/locale comparison of those mixed forms is unreliable.
+ */
+export function compareLoggedAtDesc(
+  a: { logged_at: string },
+  b: { logged_at: string },
+) {
+  return new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime()
+}
+
 /** Returns today's date as a zero-padded ISO string (YYYY-MM-DD) in local time. */
 export function getTodayKey() {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+/** Formats a Date into a zero-padded local YYYY-MM-DD key. */
+export function toDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+/** Returns the date key `dayDelta` days away from the given YYYY-MM-DD key. */
+export function shiftDateKey(dateKey: string, dayDelta: number) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return toDateKey(new Date(year, month - 1, day + dayDelta))
+}
+
+/**
+ * Builds an ISO timestamp for a local "HH:mm" time-of-day on the calendar day
+ * named by a YYYY-MM-DD key. Used when adding a log to a specific (past) day.
+ */
+export function isoFromDateAndTime(dateKey: string, timeValue: string) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  const [hours, minutes] = timeValue.split(':').map(Number)
+  return new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString()
+}
+
+/** Formats a YYYY-MM-DD key into a human-readable long date (e.g. "Mon, 5 June"). */
+export function formatFullDay(dateKey: string) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(year, month - 1, day).toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'long',
+  })
 }
 
 /** Converts a YYYY-MM-DD date key into a human-readable short date (e.g. "5 Jun"). */

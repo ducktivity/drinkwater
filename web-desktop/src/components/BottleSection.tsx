@@ -45,9 +45,18 @@ interface Props {
   onDragSettled: () => void
   /** Called when the user taps "Log drank" to log the amount consumed so far without emptying the bottle. */
   onLogDrank: () => void
+  /**
+   * Whether the bottle responds to drags. Defaults to true. When false (e.g.
+   * viewing a past day), the bottle is a static, full visual with no controls,
+   * since dragging would log against today rather than the day being viewed.
+   */
+  interactive?: () => boolean
 }
 
 export function BottleSection(props: Props) {
+  /** Whether drag interaction is enabled (defaults to true when prop omitted). */
+  const isInteractive = () => props.interactive?.() ?? true
+
   /** Whether a drag interaction is currently in progress. */
   let isDragging = false
   let svgElement!: SVGSVGElement
@@ -132,10 +141,12 @@ export function BottleSection(props: Props) {
           viewBox={`0 0 ${SVG_W} ${SVG_H}`}
           class="overflow-visible"
           onMouseDown={(e) => {
+            if (!isInteractive()) return
             isDragging = true
             handleDragMove(e.clientY)
           }}
           onTouchStart={(e) => {
+            if (!isInteractive()) return
             e.preventDefault()
             isDragging = true
             handleDragMove(e.touches[0].clientY)
@@ -222,19 +233,21 @@ export function BottleSection(props: Props) {
           </text>
         </svg>
 
-        <div class="text-xs text-[#7a7f96] flex items-center gap-1.25 mt-1">
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M12 5v14M5 12l7 7 7-7" />
-          </svg>
-          Drag to set level
-        </div>
+        <Show when={isInteractive()}>
+          <div class="text-xs text-[#7a7f96] flex items-center gap-1.25 mt-1">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M12 5v14M5 12l7 7 7-7" />
+            </svg>
+            Drag to set level
+          </div>
+        </Show>
       </div>
 
       <div class="text-[13px] text-[#7a7f96] text-center">
@@ -243,7 +256,7 @@ export function BottleSection(props: Props) {
 
       {/* Log the amount drunk so far without dragging the bottle all the way to empty.
           Disabled until at least 1 ml has been consumed from the active bottle. */}
-      <Show when={mlDrankSoFar() > 0}>
+      <Show when={isInteractive() && mlDrankSoFar() > 0}>
         <button
           class="px-4 py-2 rounded-[10px] border border-white/10 bg-[#222535] text-[13px] font-semibold text-[#f0f2f7] cursor-pointer"
           onClick={() => props.onLogDrank()}

@@ -1,0 +1,80 @@
+package handlers
+
+import (
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"drinkwater-backend/api"
+	"drinkwater-backend/database"
+	"drinkwater-backend/database/dbgen"
+
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+// GetLogs godoc
+// @Summary      Fetch water logs for a specific day
+// @Description  Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are no longer cached locally.
+// @Tags         logs
+// @Produce      json
+// @Param        from  query     string            true   "ISO-8601 timestamp marking the inclusive start of the range"
+// @Param        to    query     string            true   "ISO-8601 timestamp marking the exclusive end of the range"
+// @Success      200   {object}  api.LogsResponse  "Logs within the requested range, most recent first"
+// @Failure      400   {object}  map[string]string "Missing or invalid range parameters"
+// @Failure      500   {object}  map[string]string "Internal server or database error"
+// @Router       /logs [get]
+func GetLogs(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// 1. Parse the half-open [from, to) range from the query string. Both bounds
+	// are required so the query is always scoped to a single day.
+	fromStr := r.URL.Query().Get("from")
+	toStr := r.URL.Query().Get("to")
+	if fromStr == "" || toStr == "" {
+		http.Error(w, `{"error": "Both 'from' and 'to' timestamps are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	fromTime, err := time.Parse(time.RFC3339, fromStr)
+	if err != nil {
+		slog.Warn("Invalid 'from' timestamp provided", "from", fromStr)
+		http.Error(w, `{"error": "Invalid 'from' timestamp format"}`, http.StatusBadRequest)
+		return
+	}
+
+	toTime, err := time.Parse(time.RFC3339, toStr)
+	if err != nil {
+		slog.Warn("Invalid 'to' timestamp provided", "to", toStr)
+		http.Error(w, `{"error": "Invalid 'to' timestamp format"}`, http.StatusBadRequest)
+		return
+	}
+
+	// 2. Query the day's non-deleted logs for the (dummy) user.
+	dbLogs, err := dbgen.New(database.DB).GetWaterLogsInRange(ctx, dbgen.GetWaterLogsInRangeParams{
+		UserID:     dummyUserID,
+		LoggedAt:   pgtype.Timestamptz{Time: fromTime, Valid: true},
+		LoggedAt_2: pgtype.Timestamptz{Time: toTime, Valid: true},
+	})
+	if err != nil {
+		slog.Error("Failed to query logs in range", "error", err)
+		http.Error(w, `{"error": "Failed to fetch logs"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Map the raw database rows back to our clean API DTOs.
+	logs := make([]api.WaterLog, 0, len(dbLogs))
+	for _, dbLog := range dbLogs {
+		logs = append(logs, api.WaterLog{
+			ID:        dbLog.ID,
+			AmountMl:  dbLog.AmountMl,
+			LoggedAt:  dbLog.LoggedAt.Time,
+			IsDeleted: dbLog.IsDeleted,
+		})
+	}
+
+	// 4. Send the successful JSON response.
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(api.LogsResponse{Logs: logs})
+}

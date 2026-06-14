@@ -49,6 +49,7 @@ func main() {
 	})
 
 	router.Post("/sync", handlers.PostSync)
+	router.Get("/logs", handlers.GetLogs)
 
 	slog.Info("Starting Drinkwater server", "port", 8080)
 	if err := http.ListenAndServe(":8080", router); err != nil {

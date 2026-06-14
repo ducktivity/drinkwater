@@ -1,116 +1,164 @@
 {
-    "swagger": "2.0",
-    "info": {
-        "description": "Local-first sync engine.",
-        "title": "Drinkwater Sync API",
-        "contact": {},
-        "version": "1.0"
-    },
-    "basePath": "/",
-    "paths": {
-        "/sync": {
-            "post": {
-                "description": "Pushes local changes (upserts) to the server and pulls remote changes (delta) made on other devices.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "sync"
-                ],
-                "summary": "Sync local water logs with the server",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "ISO-8601 Timestamp of the client's last sync",
-                        "name": "since",
-                        "in": "query"
-                    },
-                    {
-                        "description": "Array of local water logs to sync",
-                        "name": "payload",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/api.WaterLog"
-                            }
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful sync response containing delta changes",
-                        "schema": {
-                            "$ref": "#/definitions/api.SyncResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request body",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server or database error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
+  "swagger": "2.0",
+  "info": {
+    "description": "Local-first sync engine.",
+    "title": "Drinkwater Sync API",
+    "contact": {},
+    "version": "1.0"
+  },
+  "basePath": "/",
+  "paths": {
+    "/logs": {
+      "get": {
+        "description": "Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are no longer cached locally.",
+        "produces": ["application/json"],
+        "tags": ["logs"],
+        "summary": "Fetch water logs for a specific day",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "ISO-8601 timestamp marking the inclusive start of the range",
+            "name": "from",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "ISO-8601 timestamp marking the exclusive end of the range",
+            "name": "to",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logs within the requested range, most recent first",
+            "schema": {
+              "$ref": "#/definitions/api.LogsResponse"
             }
+          },
+          "400": {
+            "description": "Missing or invalid range parameters",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server or database error",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
         }
+      }
     },
-    "definitions": {
-        "api.SyncResponse": {
-            "type": "object",
-            "required": [
-                "changes",
-                "server_time"
-            ],
-            "properties": {
-                "changes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/api.WaterLog"
-                    }
-                },
-                "server_time": {
-                    "type": "string"
-                }
+    "/sync": {
+      "post": {
+        "description": "Pushes local changes (upserts) to the server and pulls remote changes (delta) made on other devices.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["sync"],
+        "summary": "Sync local water logs with the server",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "ISO-8601 Timestamp of the client's last sync",
+            "name": "since",
+            "in": "query"
+          },
+          {
+            "description": "Array of local water logs to sync",
+            "name": "payload",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/api.WaterLog"
+              }
             }
-        },
-        "api.WaterLog": {
-            "type": "object",
-            "required": [
-                "amount_ml",
-                "id",
-                "is_deleted",
-                "logged_at"
-            ],
-            "properties": {
-                "amount_ml": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "is_deleted": {
-                    "type": "boolean"
-                },
-                "logged_at": {
-                    "type": "string"
-                }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful sync response containing delta changes",
+            "schema": {
+              "$ref": "#/definitions/api.SyncResponse"
             }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server or database error",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
         }
+      }
     }
+  },
+  "definitions": {
+    "api.LogsResponse": {
+      "type": "object",
+      "required": ["logs"],
+      "properties": {
+        "logs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.WaterLog"
+          }
+        }
+      }
+    },
+    "api.SyncResponse": {
+      "type": "object",
+      "required": ["changes", "server_time"],
+      "properties": {
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/api.WaterLog"
+          }
+        },
+        "server_time": {
+          "type": "string"
+        }
+      }
+    },
+    "api.WaterLog": {
+      "type": "object",
+      "required": ["amount_ml", "id", "is_deleted", "logged_at"],
+      "properties": {
+        "amount_ml": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "is_deleted": {
+          "type": "boolean"
+        },
+        "logged_at": {
+          "type": "string"
+        }
+      }
+    }
+  }
 }

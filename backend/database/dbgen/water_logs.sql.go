@@ -13,8 +13,8 @@ import (
 )
 
 const getAllWaterLogs = `-- name: GetAllWaterLogs :many
-SELECT id, amount_ml, logged_at, is_deleted, server_updated_at 
-FROM water_logs 
+SELECT id, amount_ml, logged_at, is_deleted, server_updated_at
+FROM water_logs
 WHERE user_id = $1
 `
 
@@ -80,6 +80,57 @@ func (q *Queries) GetDeltaWaterLogs(ctx context.Context, arg GetDeltaWaterLogsPa
 	var items []GetDeltaWaterLogsRow
 	for rows.Next() {
 		var i GetDeltaWaterLogsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AmountMl,
+			&i.LoggedAt,
+			&i.IsDeleted,
+			&i.ServerUpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getWaterLogsInRange = `-- name: GetWaterLogsInRange :many
+SELECT id, amount_ml, logged_at, is_deleted, server_updated_at
+FROM water_logs
+WHERE user_id = $1
+  AND is_deleted = FALSE
+  AND logged_at >= $2
+  AND logged_at < $3
+ORDER BY logged_at DESC
+`
+
+type GetWaterLogsInRangeParams struct {
+	UserID     uuid.UUID
+	LoggedAt   pgtype.Timestamptz
+	LoggedAt_2 pgtype.Timestamptz
+}
+
+type GetWaterLogsInRangeRow struct {
+	ID              uuid.UUID
+	AmountMl        int32
+	LoggedAt        pgtype.Timestamptz
+	IsDeleted       bool
+	ServerUpdatedAt pgtype.Timestamptz
+}
+
+// Returns a user's non-deleted logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day, so day boundaries honour the client's timezone.
+func (q *Queries) GetWaterLogsInRange(ctx context.Context, arg GetWaterLogsInRangeParams) ([]GetWaterLogsInRangeRow, error) {
+	rows, err := q.db.Query(ctx, getWaterLogsInRange, arg.UserID, arg.LoggedAt, arg.LoggedAt_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetWaterLogsInRangeRow
+	for rows.Next() {
+		var i GetWaterLogsInRangeRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.AmountMl,

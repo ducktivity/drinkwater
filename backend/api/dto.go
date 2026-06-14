@@ -19,3 +19,10 @@ type SyncResponse struct {
 	Changes    []WaterLog `json:"changes" validate:"required"`
 	ServerTime time.Time  `json:"server_time" validate:"required"`
 }
+
+// LogsResponse represents the JSON payload returned when fetching the logs for a
+// specific day. It carries only the non-deleted entries that fall within the
+// requested range, most recent first.
+type LogsResponse struct {
+	Logs []WaterLog `json:"logs" validate:"required"`
+}
