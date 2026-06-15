@@ -14,7 +14,9 @@ fi
 DB_URL="postgres://postgres:postgres@localhost:5432/drinkwater?sslmode=disable" # Default fallback
 if [ -f .env ]; then
   # This clever line reads the .env file and extracts the DATABASE_URL specifically
-  ENV_URL=$(grep -v '^#' .env | grep -e "DATABASE_URL" | sed -e 's/.*=//')
+  # Strip only up to the FIRST '=' so values that themselves contain '='
+  # (e.g. a Neon URL ending in '?sslmode=require') survive intact.
+  ENV_URL=$(grep -v '^#' .env | grep -e "DATABASE_URL" | sed -e 's/^[^=]*=//')
   if [ ! -z "$ENV_URL" ]; then
     DB_URL=$ENV_URL
   fi
