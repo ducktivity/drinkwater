@@ -1,0 +1,82 @@
+# Minimal starter stack for local/early deployment.
+#
+# The full topology in docs/architecture.md §6/§7 (cloudflared outbound tunnel +
+# app-blue/app-green colors + on-box deploy agent) layers on top of this. The
+# single `app` service here stands in for a live color; Vector selects app
+# containers by label, so it will pick up the blue/green pair unchanged once they
+# exist. No Loki/Grafana/Alloy: log storage, search, and retention live in
+# BetterStack, off-box.
+services:
+  app:
+    build:
+      context: ./backend
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    environment:
+      ENV: ${ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      PORT: "8080"
+      DATABASE_URL: ${DATABASE_URL}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    # Publish only to the box's loopback: handy for on-box `curl`/debugging, never
+    # reachable from outside (defense-in-depth on top of the closed firewall).
+    # cloudflared reaches the app over the private Compose network (http://app:8080),
+    # not through this mapping. docs/architecture.md §6: no public inbound ports.
+    # For pure local dev you can change this back to "8080:8080".
+    ports:
+      - "127.0.0.1:8080:8080"
+    labels:
+      # Vector's docker_logs source tails only containers carrying this label.
+      collect_logs: "true"
+    # Bound the local log buffer. Vector ships from these files and BetterStack
+    # owns long-term retention, so a few rotated files is all the box keeps.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  # Cloudflare Tunnel: the box's ONLY ingress. cloudflared dials OUT to the
+  # Cloudflare edge and forwards public traffic for your hostname down the tunnel
+  # to app:8080 over the private Compose network, so NO inbound port is opened on
+  # the box (docs/architecture.md §6). The public-hostname -> service mapping is
+  # configured in the Cloudflare Zero Trust dashboard for this named tunnel; the
+  # token below is the only delivery secret the box needs.
+  cloudflared:
+    image: cloudflare/cloudflared:latest # pin to a specific version/digest in prod
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    # Let the containerized tunnel reach services on the HOST — specifically the
+    # host's sshd on :22, so Cloudflare Access can broker SSH over the same tunnel
+    # (docs/architecture.md §6 "private admin access"). The SSH public hostname's
+    # service URL is ssh://host.docker.internal:22.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  vector:
+    # Pin to a digest in production; `-alpine` keeps the shipper tiny (~30-60MB).
+    image: timberio/vector:0.44.0-alpine
+    depends_on:
+      - app
+    environment:
+      BETTERSTACK_SOURCE_TOKEN: ${BETTERSTACK_SOURCE_TOKEN:-}
+      BETTERSTACK_INGEST_HOST: ${BETTERSTACK_INGEST_HOST:-https://in.logs.betterstack.com}
+    volumes:
+      - ./deploy/vector/vector.yaml:/etc/vector/vector.yaml:ro
+      # Read-only Docker socket so docker_logs can tail sibling containers.
+      # Egress is outbound-only to BetterStack; nothing listens inbound.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Persist the disk buffer so a BetterStack outage doesn't drop logs.
+      - vector_data:/var/lib/vector
+    restart: unless-stopped
+
+volumes:
+  vector_data:

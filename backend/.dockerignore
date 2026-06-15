@@ -1,0 +1,6 @@
+# Keep the build context small and free of local-only / secret files.
+tmp/
+.env
+.env.*
+*.log
+.air.toml
