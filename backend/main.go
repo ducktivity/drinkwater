@@ -82,7 +82,7 @@ func main() {
 		// Health probes are hit constantly by the deploy agent and uptime
 		// monitor; quiet them so they don't drown the logs.
 		QuietDownRoutes: []string{"/healthz", "/readyz", "/health"},
-		QuietDownPeriod: 10 * time.Second,
+		QuietDownPeriod: 1 * time.Hour,
 	})
 	// Base attributes ride on every line (request summaries, startup, DB) so a
 	// log aggregator can filter by env/version/commit/pid. We attach them here
