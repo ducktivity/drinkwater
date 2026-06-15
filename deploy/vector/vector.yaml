@@ -27,6 +27,10 @@ transforms:
       }
       # Source metadata for filtering/dashboards in BetterStack.
       .container = .container_name
+      # Drop docker_logs' label enrichment: it's all Compose internals + static
+      # OCI image labels (constant noise), and the one useful bit (image revision)
+      # is already on every line as the app's `commit` base attribute.
+      del(.label)
 
 sinks:
   betterstack:
