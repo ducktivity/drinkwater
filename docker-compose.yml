@@ -72,6 +72,12 @@ services:
   vector:
     # Pin to a digest in production; `-alpine` keeps the shipper tiny (~30-60MB).
     image: timberio/vector:0.44.0-alpine
+    # Watch the mounted config and hot-reload on change. Without this, Vector reads
+    # vector.yaml only at startup; since the config is a bind-mounted file, editing
+    # it does NOT make `docker compose up -d` recreate the container, so changes
+    # silently never take effect until a manual `restart vector`. --watch-config
+    # closes that gap so a vector.yaml edit applies on its own.
+    command: ["--watch-config", "--config", "/etc/vector/vector.yaml"]
     depends_on:
       - app
     environment:
