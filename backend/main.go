@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"strings"
 	"syscall"
 	"time"
 
@@ -127,8 +128,21 @@ func main() {
 	router.Use(middleware.Recoverer)
 	router.Use(sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle)
 
+	// The local dev server and the Tauri shell are always allowed; production
+	// frontend origins (e.g. the Cloudflare Pages hostname on a different domain
+	// than the API) are appended from CORS_ALLOWED_ORIGINS — a comma-separated
+	// list set in the box's .env — so the deployed web app can call /sync.
+	allowedOrigins := []string{"http://localhost:5173", "tauri://localhost"}
+	if extra := os.Getenv("CORS_ALLOWED_ORIGINS"); extra != "" {
+		for _, origin := range strings.Split(extra, ",") {
+			if origin = strings.TrimSpace(origin); origin != "" {
+				allowedOrigins = append(allowedOrigins, origin)
+			}
+		}
+	}
+
 	router.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"http://localhost:5173", "tauri://localhost"},
+		AllowedOrigins: allowedOrigins,
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}))
