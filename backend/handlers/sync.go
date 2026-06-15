@@ -77,7 +77,7 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 4. Fetch the Delta (What changed on OTHER devices?)
-	var dbLogs []dbgen.GetAllWaterLogsRow
+	var dbLogs []dbgen.GetDeltaWaterLogsRow
 	sinceStr := r.URL.Query().Get("since")
 
 	if sinceStr != "" {
@@ -88,7 +88,7 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		deltaLogs, err := qtx.GetDeltaWaterLogs(ctx, dbgen.GetDeltaWaterLogsParams{
+		dbLogs, err = qtx.GetDeltaWaterLogs(ctx, dbgen.GetDeltaWaterLogsParams{
 			UserID:          dummyUserID,
 			ServerUpdatedAt: pgtype.Timestamptz{Time: sinceTime, Valid: true},
 		})
@@ -96,18 +96,32 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 			serverError(w, r, fmt.Errorf("query delta logs: %w", err), `{"error": "Failed to fetch updates"}`)
 			return
 		}
-
-		// Map the specific delta rows to the shared return type
-		for _, l := range deltaLogs {
-			dbLogs = append(dbLogs, dbgen.GetAllWaterLogsRow(l))
-		}
 	} else {
-		// Initial sync: fetch all non-deleted records for this user
-		var err error
-		dbLogs, err = qtx.GetAllWaterLogs(ctx, dummyUserID)
+		// Initial sync: the client has no sync token yet and its UI only ever
+		// renders today's logs (older entries get pruned from IndexedDB), so we
+		// bootstrap just the recent records rather than the full history. We lack
+		// the client's timezone, so we widen the window to the UTC day ±1: a
+		// client's local "today" can fall on the previous or next UTC day (offsets
+		// span UTC-12..UTC+14), and this guarantees we capture every log that
+		// could be today for them. The client re-prunes anything outside its own
+		// local day right after syncing.
+		startOfDay := time.Date(serverNow.Year(), serverNow.Month(), serverNow.Day(), 0, 0, 0, 0, time.UTC)
+		windowStart := startOfDay.AddDate(0, 0, -1)
+		windowEnd := startOfDay.AddDate(0, 0, 2)
+
+		rangeLogs, err := qtx.GetWaterLogsInRange(ctx, dbgen.GetWaterLogsInRangeParams{
+			UserID:     dummyUserID,
+			LoggedAt:   pgtype.Timestamptz{Time: windowStart, Valid: true},
+			LoggedAt_2: pgtype.Timestamptz{Time: windowEnd, Valid: true},
+		})
 		if err != nil {
-			serverError(w, r, fmt.Errorf("query all logs: %w", err), `{"error": "Failed to fetch full history"}`)
+			serverError(w, r, fmt.Errorf("query today's logs: %w", err), `{"error": "Failed to fetch today's logs"}`)
 			return
+		}
+
+		// Map the range rows to the shared delta return type (identical fields).
+		for _, l := range rangeLogs {
+			dbLogs = append(dbLogs, dbgen.GetDeltaWaterLogsRow(l))
 		}
 	}
 

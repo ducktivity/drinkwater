@@ -12,46 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getAllWaterLogs = `-- name: GetAllWaterLogs :many
-SELECT id, amount_ml, logged_at, is_deleted, server_updated_at
-FROM water_logs
-WHERE user_id = $1
-`
-
-type GetAllWaterLogsRow struct {
-	ID              uuid.UUID
-	AmountMl        int32
-	LoggedAt        pgtype.Timestamptz
-	IsDeleted       bool
-	ServerUpdatedAt pgtype.Timestamptz
-}
-
-func (q *Queries) GetAllWaterLogs(ctx context.Context, userID uuid.UUID) ([]GetAllWaterLogsRow, error) {
-	rows, err := q.db.Query(ctx, getAllWaterLogs, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetAllWaterLogsRow
-	for rows.Next() {
-		var i GetAllWaterLogsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.AmountMl,
-			&i.LoggedAt,
-			&i.IsDeleted,
-			&i.ServerUpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getDeltaWaterLogs = `-- name: GetDeltaWaterLogs :many
 SELECT id, amount_ml, logged_at, is_deleted, server_updated_at 
 FROM water_logs 
