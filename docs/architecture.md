@@ -304,3 +304,69 @@ The GitHub Actions workflow runs the same gates a developer runs locally before 
 - **Migrations:** new goose migrations apply cleanly, and down-migrations exist, against an ephemeral Postgres in CI.
 
 The image is pushed and made eligible for promotion only after all gates pass.
+
+---
+
+## 8. Logging & Observability
+
+Observability is **lean**: the app is a stateless ~40MB Go process and the database lives off-box on Neon. A self-hosted log cluster (Loki/Grafana/Alloy) would be the heaviest tenant on the small Hetzner box, so the box runs only the app plus one tiny shipper and **all telemetry storage is hosted and off-box**.
+
+### Logging Philosophy
+
+The Go binary writes **structured JSON to stdout only** — never to files, never directly to a network sink (the sole exception is Sentry, an outbound side channel). Following 12-factor, shipping and retention are handled by the platform rather than the app. Each request produces **exactly one summary log line**, and a failure attaches its cause to that same line rather than emitting a second one.
+
+A single logger (`go-chi/httplog`, slog-native) backs both the per-request summaries and, via `slog.SetDefault`, all startup/shutdown/DB logs, so everything shares one JSON pipeline and one set of base tags.
+
+### Field Taxonomy
+
+Every line carries message-plus-KV structure:
+
+- **Base** (tagged onto all lines): `service`, `env`, `version`, `commit`, `pid`.
+- **Per-request** (request-scoped): `requestID`, `method`, `path`, `remoteIP`, `user_id`, `status`, `bytes`, `duration`.
+- **On error**: `error`, plus — for server faults (5xx) — `sentry_id` linking the log line to the Sentry issue that holds the stack trace. Client faults (4xx) are tagged `client_error` and are **not** sent to Sentry.
+
+Build info (`version`/`commit`) is injected at release time via `-ldflags`, falling back to the Go toolchain's embedded VCS stamp for local builds.
+
+### Pipeline & Topology
+
+```mermaid
+graph LR
+    App[Go binary<br/>structured JSON to stdout] --> JF[Docker json-file<br/>rotated, local buffer]
+    JF --> Vec[Vector<br/>tail · parse · enrich · disk-buffer]
+    Vec -->|outbound HTTPS| BS[BetterStack<br/>search · dashboards · alerts · retention]
+    App -.outbound HTTPS, exceptions only.-> Sentry[Sentry<br/>stack traces · grouping · alerts]
+    BSU[BetterStack Uptime] -.probes /healthz via Cloudflare.-> CF[Cloudflare edge]
+```
+
+- **Log aggregation.** `Vector` (one ~30–60MB container) tails the app containers via the Docker `docker_logs` source, parses the JSON, enriches with `container`/`host`, and ships to **BetterStack** over outbound HTTPS with an on-disk buffer (retries instead of dropping during a BetterStack blip). The BetterStack source token lives only in Vector's env — the Go app never sees it.
+- **Error tracking.** `sentry-go` captures exceptions (and panics, via middleware inside the chi `Recoverer`) with stack traces, groups them into issues, and alerts on new/spiking errors. Transport is async and errors-only (no tracing backend; `X-Request-ID` correlation is sufficient for a single stateless service). An empty `SENTRY_DSN` makes it a no-op for local dev.
+
+### Correlation
+
+`X-Request-ID` (chi's `RequestID` middleware generates it, or honours an inbound one) flows into the request context, every log line (`requestID`), and the Sentry scope. A request is therefore traceable end-to-end in BetterStack and pivotable to its Sentry issue via `sentry_id` — no Jaeger/OTel backend to operate.
+
+### Health & Readiness
+
+- `/healthz` — **liveness**: returns 200 whenever the process runs; checks no dependencies.
+- `/readyz` — **readiness**: pings NeonDB with a short timeout, returns 503 if unreachable. This is the probe the §7 deploy agent gates blue-green cutover on.
+
+Both are excluded from request logging (httplog "quiet down") so constant probing from the deploy agent and uptime monitor doesn't drown the logs. A **BetterStack uptime monitor** probes `/healthz` through the Cloudflare hostname.
+
+### Retention (the ">30 days" rule)
+
+Long-term retention is **BetterStack's** (configured per plan; the free tier covers our low, batched volume). On the box, the Docker `json-file` driver (`max-size`/`max-file`) only bounds the local buffer so disk can't fill — no compactor or retention service runs on the box. `docker logs | jq` remains a zero-dependency local fallback.
+
+### Alerting
+
+- **Sentry** → exceptions, with stack-trace grouping (new issue / regression / spike).
+- **BetterStack** → log-pattern and rate alerts (e.g. ERROR spikes, `/readyz` failures) plus the uptime monitor.
+
+Both notify email/Slack.
+
+### Graceful Shutdown
+
+The server listens with an `http.Server` cancelled by `SIGINT`/`SIGTERM`, draining in-flight requests via `srv.Shutdown` and flushing Sentry before exit — so a blue-green cutover never drops a request or loses a buffered event.
+
+### Security & Cost
+
+Vector binds nothing public; it only dials **outbound** to BetterStack, consistent with the §6 closed-inbound posture. Total added footprint on the box: the Sentry SDK (in-process, negligible) plus one Vector container (~30–60MB). No stateful telemetry storage, no Grafana/Loki, no new inbound ports.
