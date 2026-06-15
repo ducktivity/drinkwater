@@ -23,7 +23,8 @@ func Ping(ctx context.Context) error {
 }
 
 func Connect() {
-	// Coolify will inject the database connection string via this environment variable
+	// The deployment injects the connection string via this env var: in prod it is
+	// Neon's pooled URL from the box's .env; locally it falls back to the line below.
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
 		// Default fallback for running a local Postgres container

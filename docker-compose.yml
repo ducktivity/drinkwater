@@ -8,6 +8,11 @@
 # BetterStack, off-box.
 services:
   app:
+    # On the box we PULL this prebuilt image (CI publishes it to GHCR). For local
+    # dev you can instead build from ./backend via the build: block below; `docker
+    # compose build` tags the result with this same name. IMAGE_TAG lets you pin a
+    # specific sha-<gitsha> (e.g. for rollback); it defaults to the moving `latest`.
+    image: ghcr.io/ducktivity/drinkwater-backend:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       args:
