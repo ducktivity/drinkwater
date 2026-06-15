@@ -352,9 +352,9 @@ graph LR
 
 Both are excluded from request logging (httplog "quiet down") so constant probing from the deploy agent and uptime monitor doesn't drown the logs. A **BetterStack uptime monitor** probes `/healthz` through the Cloudflare hostname.
 
-### Retention (the ">30 days" rule)
+### Retention
 
-Long-term retention is **BetterStack's** (configured per plan; the free tier covers our low, batched volume). On the box, the Docker `json-file` driver (`max-size`/`max-file`) only bounds the local buffer so disk can't fill — no compactor or retention service runs on the box. `docker logs | jq` remains a zero-dependency local fallback.
+Retention lives **off-box in BetterStack** and is bounded by its plan — on the **free tier, searchable history is ~2 days**, which is sufficient for our low, batched volume (longer windows are a plan upgrade, not a box change). The box itself keeps **no durable log archive**: the Docker `json-file` driver (`max-size`/`max-file`) caps the local copy at ~30MB of rotated files (a transient tail buffer, minutes-to-hours at our volume) purely so disk can't fill — no compactor or retention service runs on the box. `docker logs | jq` remains a zero-dependency local fallback for whatever is still in that rotation.
 
 ### Alerting
 
