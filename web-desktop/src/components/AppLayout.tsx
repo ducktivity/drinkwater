@@ -5,7 +5,9 @@ import { useHydration } from '../context/HydrationContext'
 import { useHistory } from '../context/HistoryContext'
 import { useOverlay } from '../context/OverlayContext'
 import { StatsRow } from './StatsRow'
+import { SyncButton } from './SyncButton'
 import { BottleSection } from './BottleSection'
+import { syncEngine } from '../db/sync'
 import { SettingsSection } from './SettingsSection'
 import { ScheduleGoalBanner } from './ScheduleGoalBanner'
 import { ScheduleSettings } from './ScheduleSettings'
@@ -25,7 +27,12 @@ export function AppLayout() {
 
   return (
     <div class="min-h-screen bg-[#0f1117] text-[#f0f2f7] font-sans flex flex-col items-center px-4 pt-6 pb-10">
-      <div class="w-full max-w-105 bg-[#1a1d26] border border-white/8 rounded-2xl pt-7 px-6 pb-6 flex flex-col items-center gap-6">
+      <div class="relative w-full max-w-105 bg-[#1a1d26] border border-white/8 rounded-2xl pt-7 px-6 pb-6 flex flex-col items-center gap-6">
+        {/* Manual sync control, anchored to the card's top-right corner. */}
+        <div class="absolute top-2.5 right-2.5">
+          <SyncButton onSync={syncEngine} />
+        </div>
+
         <DateNavigator
           selectedDate={history.selectedDate}
           onSelect={history.setSelectedDate}

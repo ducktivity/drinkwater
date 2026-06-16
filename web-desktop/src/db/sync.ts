@@ -2,7 +2,13 @@ import { db } from './db'
 import { apiClient } from './api'
 import { cleanupSyncedStaleLogs } from './cleanup'
 
-export const syncEngine = async () => {
+/**
+ * Pushes unsynced local logs to the backend and merges back any changes from
+ * other devices. Resolves to `true` when the round-trip succeeds and `false`
+ * when the request is rejected or the device is offline, so callers (e.g. the
+ * manual refresh button) can reflect the outcome in the UI.
+ */
+export const syncEngine = async (): Promise<boolean> => {
   try {
     console.log('🔄 Starting sync...')
 
@@ -35,10 +41,10 @@ export const syncEngine = async () => {
 
     if (error) {
       console.error('❌ Sync API rejected the request:', error)
-      return
+      return false
     }
 
-    if (!data) return
+    if (!data) return false
 
     // // 4. We successfully pushed! Mark our local logs as synced
     // if (unsyncedLogs.length > 0) {
@@ -69,9 +75,12 @@ export const syncEngine = async () => {
     if (removed > 0) {
       console.log(`🧹 Cleaned up ${removed} stale synced log(s).`)
     }
+
+    return true
   } catch (err) {
     // If we are offline, fetch fails here. We just catch it silently.
     // The user doesn't care, they are local-first!
     console.warn('📶 Offline: Sync deferred until connection is restored.', err)
+    return false
   }
 }

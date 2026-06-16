@@ -24,7 +24,7 @@ export function DateNavigator(props: Props) {
   }
 
   return (
-    <div class="w-full flex items-center justify-between gap-3">
+    <div class="flex items-center justify-between gap-3">
       <button
         type="button"
         aria-label="Previous day"
