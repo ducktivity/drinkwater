@@ -4,6 +4,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useHydration } from '../context/HydrationContext'
 import { useHistory } from '../context/HistoryContext'
 import { useOverlay } from '../context/OverlayContext'
+import { useToast } from '../context/ToastContext'
 import { StatsRow } from './StatsRow'
 import { SyncButton } from './SyncButton'
 import { BottleSection } from './BottleSection'
@@ -24,13 +25,34 @@ export function AppLayout() {
   const hydration = useHydration()
   const history = useHistory()
   const overlay = useOverlay()
+  const toast = useToast()
+
+  /**
+   * Runs a manual sync and surfaces a toast if it fails, distinguishing being
+   * offline (changes are queued locally) from an actual backend error. Returns
+   * the outcome so the SyncButton can render its spin/synced feedback.
+   */
+  async function handleManualSync() {
+    const succeeded = await syncEngine()
+    if (!succeeded) {
+      if (!navigator.onLine) {
+        toast.showToast(
+          "You're offline — your changes will sync once you're back online.",
+          'info',
+        )
+      } else {
+        toast.showToast('Sync failed. Please try again.', 'error')
+      }
+    }
+    return succeeded
+  }
 
   return (
     <div class="min-h-screen bg-[#0f1117] text-[#f0f2f7] font-sans flex flex-col items-center px-4 pt-6 pb-10">
       <div class="relative w-full max-w-105 bg-[#1a1d26] border border-white/8 rounded-2xl pt-7 px-6 pb-6 flex flex-col items-center gap-6">
         {/* Manual sync control, anchored to the card's top-right corner. */}
         <div class="absolute top-2.5 right-2.5">
-          <SyncButton onSync={syncEngine} />
+          <SyncButton onSync={handleManualSync} />
         </div>
 
         <DateNavigator

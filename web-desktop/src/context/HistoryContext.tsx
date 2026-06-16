@@ -11,6 +11,7 @@ import { type LocalWaterLog } from '../db/db'
 import { fetchLogsForDate } from '../db/history'
 import { getTodayKey, compareLoggedAtDesc } from '../utils'
 import { useHydration } from './HydrationContext'
+import { useToast } from './ToastContext'
 
 /** History view: the day being viewed and its logs (today live, past fetched). */
 interface HistoryContextValue {
@@ -34,6 +35,7 @@ const HistoryContext = createContext<HistoryContextValue>()
 /** Provides the history view state for navigating and editing past days. */
 export function HistoryProvider(props: ParentProps) {
   const hydration = useHydration()
+  const toast = useToast()
 
   // The day currently being viewed, as a YYYY-MM-DD key. Defaults to today.
   const [selectedDate, setSelectedDate] = createSignal(getTodayKey())
@@ -80,7 +82,20 @@ export function HistoryProvider(props: ParentProps) {
       })
       .catch((err) => {
         console.error(err)
-        if (selectedDate() === date) setHistoryLogs([])
+        if (selectedDate() === date) {
+          setHistoryLogs([])
+          if (!navigator.onLine) {
+            toast.showToast(
+              "You're offline — this day's logs can't be loaded right now.",
+              'info',
+            )
+          } else {
+            toast.showToast(
+              "Couldn't load logs for this day. Please try again.",
+              'error',
+            )
+          }
+        }
       })
       .finally(() => {
         if (selectedDate() === date) setIsLoadingHistory(false)
