@@ -17,8 +17,26 @@ export const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
   intervalMin: 60,
 }
 
-/** Whether the Notification API is available in this browser. */
+/** Title/body shared by both the desktop and browser notifications. */
+const REMINDER_TITLE = 'Time to hydrate 💧'
+const REMINDER_BODY = 'Take a sip of water to stay on track.'
+
+/**
+ * Whether we're running inside the Tauri desktop shell (vs. a plain browser).
+ * Tauri injects `__TAURI_INTERNALS__` onto the window, so its presence is a
+ * reliable, import-free way to branch between the native and web reminder paths.
+ */
+function isTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+}
+
+/**
+ * Whether reminders can be surfaced in this environment. Always true on desktop
+ * (Tauri ships its own notification plugin); on the web it depends on the
+ * browser exposing the Notification API.
+ */
 export function isNotificationSupported(): boolean {
+  if (isTauri()) return true
   return typeof window !== 'undefined' && 'Notification' in window
 }
 
@@ -27,6 +45,12 @@ export function isNotificationSupported(): boolean {
  * the permission has not yet been decided. Resolves to true when granted.
  */
 export async function ensureNotificationPermission(): Promise<boolean> {
+  if (isTauri()) {
+    const { isPermissionGranted, requestPermission } =
+      await import('@tauri-apps/plugin-notification')
+    if (await isPermissionGranted()) return true
+    return (await requestPermission()) === 'granted'
+  }
   if (!isNotificationSupported()) return false
   if (Notification.permission === 'granted') return true
   if (Notification.permission === 'denied') return false
@@ -35,15 +59,53 @@ export async function ensureNotificationPermission(): Promise<boolean> {
 }
 
 /**
- * Shows a browser notification when permission has been granted. Silently does
- * nothing otherwise, so callers can fire reminders without guarding every call.
+ * Forces the desktop window to the foreground so the reminder is impossible to
+ * miss: unminimize and show it (in case it was minimized or hidden), pull focus,
+ * and briefly pin it on top. The always-on-top pin works around Windows'
+ * foreground-lock, which would otherwise leave a programmatically-focused window
+ * buried behind whatever app the user is currently in. The pin is released a
+ * few seconds later so the window behaves normally once it's been noticed.
  */
-function showNotification(title: string, body: string) {
+async function forceWindowToFront(): Promise<void> {
+  const { getCurrentWindow } = await import('@tauri-apps/api/window')
+  const win = getCurrentWindow()
+  await win.unminimize()
+  await win.show()
+  await win.setAlwaysOnTop(true)
+  await win.setFocus()
+  setTimeout(() => {
+    win.setAlwaysOnTop(false).catch(() => {
+      /* Window may have closed; nothing to restore. */
+    })
+  }, 4000)
+}
+
+/**
+ * Fires a single drink-water reminder. On desktop this sends a native OS
+ * notification and forces the window to pop to the foreground; on the web it
+ * falls back to a passive browser notification (no window control available).
+ */
+async function fireReminder(): Promise<void> {
+  if (isTauri()) {
+    try {
+      const { isPermissionGranted, sendNotification } =
+        await import('@tauri-apps/plugin-notification')
+      if (await isPermissionGranted()) {
+        sendNotification({ title: REMINDER_TITLE, body: REMINDER_BODY })
+      }
+      await forceWindowToFront()
+    } catch (error) {
+      console.error('Failed to fire desktop reminder', error)
+    }
+    return
+  }
+
+  // Browser fallback: a passive notification — there's no window to focus.
   if (!isNotificationSupported() || Notification.permission !== 'granted')
     return
   try {
-    new Notification(title, {
-      body,
+    new Notification(REMINDER_TITLE, {
+      body: REMINDER_BODY,
       tag: 'drinkwater-reminder', // Coalesce repeats into a single notification.
     })
   } catch {
@@ -67,10 +129,7 @@ export function createReminderEngine(options: ReminderEngineOptions) {
     if (!enabled || intervalMin <= 0) return
 
     const intervalId = setInterval(() => {
-      showNotification(
-        'Time to hydrate 💧',
-        'Take a sip of water to stay on track.',
-      )
+      void fireReminder()
     }, intervalMin * 60_000)
     onCleanup(() => clearInterval(intervalId))
   })
