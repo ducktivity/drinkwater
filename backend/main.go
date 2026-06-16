@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -46,12 +48,16 @@ type config struct {
 }
 
 func loadConfig() config {
+	env := getenv("ENV", "development")
+	// Local development defaults to pretty, trimmed text output; staging/prod
+	// default to JSON so the log aggregator can parse it. An explicit LOG_FORMAT
+	// still wins, so either format can be forced in any environment.
+	defaultLogFormat := "json"
+	if env == "development" {
+		defaultLogFormat = "text"
+	}
 	return config{
-		env:       getenv("ENV", "development"),
-		port:      getenv("PORT", "8080"),
-		logLevel:  httplog.LevelByName(getenv("LOG_LEVEL", "info")),
-		logJSON:   getenv("LOG_FORMAT", "json") == "json",
-		sentryDSN: os.Getenv("SENTRY_DSN"),
+		logJSON:      getenv("LOG_FORMAT", defaultLogFormat) == "json",
 	}
 }
 
@@ -88,12 +94,16 @@ func main() {
 	// Base attributes ride on every line (request summaries, startup, DB) so a
 	// log aggregator can filter by env/version/commit/pid. We attach them here
 	// rather than via httplog's Tags option, which it drops in Concise mode.
-	logger.Logger = logger.Logger.With(
-		"env", cfg.env,
-		"version", version,
-		"commit", shortCommit(commit),
-		"pid", os.Getpid(),
-	)
+	// In local text mode we skip them to keep each line short and readable —
+	// they only earn their keep when logs are shipped somewhere queryable.
+	if cfg.logJSON {
+		logger.Logger = logger.Logger.With(
+			"env", cfg.env,
+			"version", version,
+			"commit", shortCommit(commit),
+			"pid", os.Getpid(),
+		)
+	}
 	slog.SetDefault(logger.Logger)
 
 	godotenv.Load()
@@ -125,6 +135,13 @@ func main() {
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
 	router.Use(httplog.RequestLogger(logger))
+	// Development only: attach the request body to each request summary so you can
+	// see exactly what the client sent. Bodies can carry user data, so this never
+	// runs in staging/prod. It must sit inside RequestLogger, which puts the log
+	// entry into the request context for LogEntrySetField to find.
+	if cfg.env == "development" {
+		router.Use(devRequestBodyLogger)
+	}
 	router.Use(middleware.Recoverer)
 	router.Use(sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle)
 
@@ -213,6 +230,35 @@ func resolveBuildInfo() {
 	if commit == "" {
 		commit = "unknown"
 	}
+}
+
+// devRequestBodyLogger reads the request body, attaches it to the httplog entry
+// as "requestBody", and restores the body so downstream handlers still receive it
+// intact. It is wired up only in development — we deliberately keep request bodies
+// out of staging/prod logs since they can contain user data. The body is capped at
+// maxBodyLog bytes in the log so a large sync payload can't flood the console; the
+// handler always gets the full, untruncated body via the MultiReader below.
+func devRequestBodyLogger(next http.Handler) http.Handler {
+	const maxBodyLog = 4 << 10 // 4 KiB
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil && r.ContentLength != 0 {
+			// Read up to the cap (+1 byte to detect truncation) without consuming
+			// the rest, then splice the buffered prefix back in front of whatever
+			// is left so the handler sees the complete body.
+			prefix, err := io.ReadAll(io.LimitReader(r.Body, maxBodyLog+1))
+			if err == nil {
+				r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(prefix), r.Body))
+
+				logged := prefix
+				if len(logged) > maxBodyLog {
+					logged = logged[:maxBodyLog]
+				}
+				httplog.LogEntrySetField(r.Context(), "requestBody", slog.StringValue(string(logged)))
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // shortCommit trims a git SHA to its first 12 characters for readable logs.
