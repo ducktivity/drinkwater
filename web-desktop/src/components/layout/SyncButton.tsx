@@ -26,9 +26,9 @@ export function SyncButton() {
     if (status() === 'syncing') return
 
     setStatus('syncing')
-    const succeeded = await syncEngine()
+    const result = await syncEngine()
 
-    if (succeeded) {
+    if (result.ok) {
       setStatus('synced')
       revertTimer = setTimeout(() => setStatus('idle'), SYNCED_FEEDBACK_MS)
     } else {
@@ -40,7 +40,13 @@ export function SyncButton() {
           'info',
         )
       } else {
-        toast.showToast('Sync failed. Please try again.', 'error')
+        // Attach the request id (when the backend exposed one) so the user can
+        // report a precise support code.
+        toast.showToast(
+          'Sync failed. Please try again.',
+          'error',
+          result.requestId,
+        )
       }
     }
   }

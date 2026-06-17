@@ -9,6 +9,7 @@ import {
 } from 'solid-js'
 import { type LocalWaterLog } from '../db/db'
 import { fetchLogsForDate, readLocalLogsForDate } from '../db/history'
+import { RequestError } from '../db/api'
 import { getTodayKey, compareLoggedAtDesc } from '../utils'
 import { useHydration } from './HydrationContext'
 import { useToast } from './ToastContext'
@@ -108,9 +109,13 @@ export function HistoryProvider(props: ParentProps) {
               'info',
             )
           } else {
+            // Surface the backend request id (when present) as a support code.
+            const requestId =
+              err instanceof RequestError ? err.requestId : undefined
             toast.showToast(
               "Couldn't load logs for this day. Please try again.",
               'error',
+              requestId,
             )
           }
         }

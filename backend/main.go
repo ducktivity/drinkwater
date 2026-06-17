@@ -170,6 +170,11 @@ func main() {
 	// so a panic is captured-with-stacktrace and then re-panicked up to Recoverer,
 	// which turns it into a clean 500.
 	router.Use(middleware.RequestID)
+	// Echo the request id (the same value httplog records as "requestID") onto the
+	// response so the frontend can show it to users for support reports. chi's
+	// RequestID middleware only stashes the id in the context; it never writes a
+	// response header, so we do it here.
+	router.Use(echoRequestID)
 	router.Use(middleware.RealIP)
 	router.Use(httplog.RequestLogger(logger))
 	// Development only: attach the request body to each request summary so you can
@@ -199,6 +204,11 @@ func main() {
 		AllowedOrigins: allowedOrigins,
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
+		// Surface the per-request id (written by echoRequestID above) to the browser.
+		// Browsers hide non-simple response headers from JS unless they're explicitly
+		// exposed; without this the frontend can't read the id to show users for
+		// support reports.
+		ExposedHeaders: []string{"X-Request-Id"},
 	}))
 
 	// Liveness vs readiness: /healthz proves the process runs; /readyz proves it
@@ -303,6 +313,20 @@ func devRequestBodyLogger(next http.Handler) http.Handler {
 				}
 				httplog.LogEntrySetField(r.Context(), "requestBody", slog.StringValue(string(logged)))
 			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// echoRequestID copies the chi request id into the X-Request-Id response header.
+// It must run after middleware.RequestID (which puts the id in the context) so the
+// id matches the "requestID" field httplog records — letting support cross-reference
+// a code the user reports against the exact log line. The header is set before the
+// handler writes the body, so it survives even on error responses.
+func echoRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
+			w.Header().Set("X-Request-Id", reqID)
 		}
 		next.ServeHTTP(w, r)
 	})

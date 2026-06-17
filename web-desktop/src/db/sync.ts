@@ -1,21 +1,33 @@
 import { db } from './db'
-import { apiClient } from './api'
+import { apiClient, getRequestId } from './api'
 import { getToken } from './token'
 import { cleanupSyncedStaleLogs } from './cleanup'
 
 /**
- * Pushes unsynced local logs to the backend and merges back any changes from
- * other devices. Resolves to `true` when the round-trip succeeds and `false`
- * when the request is rejected or the device is offline, so callers (e.g. the
- * manual refresh button) can reflect the outcome in the UI.
+ * The outcome of a sync attempt. `ok` is true on a successful round-trip. On a
+ * backend rejection, `requestId` carries the per-request id (when the response
+ * exposed one) so the UI can show the user a support code. Offline failures have
+ * no response and therefore no `requestId`.
  */
-export const syncEngine = async (): Promise<boolean> => {
+export interface SyncResult {
+  ok: boolean
+  requestId?: string
+}
+
+/**
+ * Pushes unsynced local logs to the backend and merges back any changes from
+ * other devices. Resolves to `{ ok: true }` when the round-trip succeeds and
+ * `{ ok: false }` (optionally with a `requestId`) when the request is rejected or
+ * the device is offline, so callers (e.g. the manual refresh button) can reflect
+ * the outcome in the UI.
+ */
+export const syncEngine = async (): Promise<SyncResult> => {
   // The single sync gate: with no session token the user has no account, so the
   // app stays 100% local and never calls the backend. Because every sync trigger
   // (app load, regained connectivity, after each log change) funnels through
   // here, this one check keeps the whole client offline-only until sign-in.
   if (!getToken()) {
-    return false
+    return { ok: false }
   }
 
   try {
@@ -39,7 +51,7 @@ export const syncEngine = async (): Promise<boolean> => {
     }))
 
     // 3. Make the type-safe API call to our Go backend
-    const { data, error } = await apiClient.POST('/sync', {
+    const { data, error, response } = await apiClient.POST('/sync', {
       params: {
         query: {
           since: lastSync || undefined,
@@ -49,11 +61,12 @@ export const syncEngine = async (): Promise<boolean> => {
     })
 
     if (error) {
-      console.error('❌ Sync API rejected the request:', error)
-      return false
+      const requestId = getRequestId(response)
+      console.error('❌ Sync API rejected the request:', error, { requestId })
+      return { ok: false, requestId }
     }
 
-    if (!data) return false
+    if (!data) return { ok: false, requestId: getRequestId(response) }
 
     // // 4. We successfully pushed! Mark our local logs as synced
     // if (unsyncedLogs.length > 0) {
@@ -85,11 +98,12 @@ export const syncEngine = async (): Promise<boolean> => {
       console.log(`🧹 Cleaned up ${removed} stale synced log(s).`)
     }
 
-    return true
+    return { ok: true }
   } catch (err) {
     // If we are offline, fetch fails here. We just catch it silently.
-    // The user doesn't care, they are local-first!
+    // The user doesn't care, they are local-first! No response means no request
+    // id to surface.
     console.warn('📶 Offline: Sync deferred until connection is restored.', err)
-    return false
+    return { ok: false }
   }
 }

@@ -1,10 +1,52 @@
-import { For, Show } from 'solid-js'
+import { For, Show, createSignal, onCleanup } from 'solid-js'
 import { useToast, type Toast } from '../../context/ToastContext'
 
 /** Per-type accent colour for the toast's left border and icon. */
 const ACCENT: Record<Toast['type'], string> = {
   error: 'border-l-rose-500 text-rose-400',
   info: 'border-l-amber-400 text-amber-300',
+}
+
+/** How long the "Copied" confirmation lingers after copying the error code. */
+const COPIED_FEEDBACK_MS = 1500
+
+/**
+ * The support code line for an error toast: the backend request id shown in muted
+ * monospace plus a button that copies the full id to the clipboard. Lets a user
+ * report a precise code that pinpoints the failing request in the logs.
+ */
+function ToastErrorCode(props: { code: string }) {
+  const [copied, setCopied] = createSignal(false)
+  let resetTimer: ReturnType<typeof setTimeout> | undefined
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(props.code)
+      setCopied(true)
+      clearTimeout(resetTimer)
+      resetTimer = setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS)
+    } catch {
+      // Clipboard access can be denied (e.g. insecure context); the code stays
+      // visible for the user to copy manually, so there's nothing to recover.
+    }
+  }
+
+  onCleanup(() => clearTimeout(resetTimer))
+
+  return (
+    <div class="flex items-center gap-1.5">
+      <span class="min-w-0 truncate font-mono text-[11px] text-[#7a7f96]">
+        {props.code}
+      </span>
+      <button
+        type="button"
+        onClick={copy}
+        class="shrink-0 cursor-pointer text-[11px] text-[#7a7f96] underline underline-offset-2 transition-colors hover:text-[#f0f2f7]"
+      >
+        {copied() ? 'Copied' : 'Copy error code'}
+      </button>
+    </div>
+  )
 }
 
 /**
@@ -60,9 +102,14 @@ export function ToastContainer() {
               </Show>
             </span>
 
-            <span class="flex-1 text-[13px] leading-snug text-[#f0f2f7]">
-              {toast.message}
-            </span>
+            <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+              <span class="text-[13px] leading-snug text-[#f0f2f7]">
+                {toast.message}
+              </span>
+              <Show when={toast.requestId}>
+                {(code) => <ToastErrorCode code={code()} />}
+              </Show>
+            </div>
 
             <button
               type="button"

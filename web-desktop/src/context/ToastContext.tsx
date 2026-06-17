@@ -13,13 +13,21 @@ export interface Toast {
   message: string
   /** `error` for failures, `info` for neutral status like being offline. */
   type: 'error' | 'info'
+  /**
+   * Optional backend request id for a failed request. When set, the toast shows
+   * it as a copyable support code the user can report.
+   */
+  requestId?: string
 }
 
 interface ToastContextValue {
   /** The toasts currently on screen, oldest first. */
   toasts: Accessor<Toast[]>
-  /** Queues a toast; it auto-dismisses after a few seconds. */
-  showToast: (message: string, type?: Toast['type']) => void
+  /**
+   * Queues a toast; it auto-dismisses after a few seconds. Pass `requestId` to
+   * attach a copyable support code (e.g. from a failed backend request).
+   */
+  showToast: (message: string, type?: Toast['type'], requestId?: string) => void
   /** Removes a toast immediately (e.g. when the user dismisses it). */
   dismissToast: (id: number) => void
 }
@@ -47,9 +55,13 @@ export function ToastProvider(props: ParentProps) {
     setToasts((prev) => prev.filter((toast) => toast.id !== id))
   }
 
-  function showToast(message: string, type: Toast['type'] = 'error') {
+  function showToast(
+    message: string,
+    type: Toast['type'] = 'error',
+    requestId?: string,
+  ) {
     const id = nextId++
-    setToasts((prev) => [...prev, { id, message, type }])
+    setToasts((prev) => [...prev, { id, message, type, requestId }])
     timers.set(
       id,
       setTimeout(() => dismissToast(id), TOAST_LIFETIME_MS),

@@ -1,5 +1,5 @@
 import { db, type LocalWaterLog } from './db'
-import { apiClient } from './api'
+import { apiClient, getRequestId, RequestError } from './api'
 import { compareLoggedAtDesc } from '../utils'
 
 /**
@@ -57,10 +57,14 @@ export async function fetchLogsForDate(
   const { from, to } = localDayRange(dateKey)
 
   // Remote logs for the day (already-synced source of truth).
-  const { data, error } = await apiClient.GET('/logs', {
+  const { data, error, response } = await apiClient.GET('/logs', {
     params: { query: { from, to } },
   })
-  if (error) throw new Error('Failed to fetch logs for date')
+  if (error)
+    throw new RequestError(
+      'Failed to fetch logs for date',
+      getRequestId(response),
+    )
 
   // Local logs for the day, including pending unsynced edits/additions.
   const localLogs = await db.waterLogs
