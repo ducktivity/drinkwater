@@ -15,6 +15,7 @@ import { ScheduleSettings } from './ScheduleSettings'
 import { DateNavigator } from './DateNavigator'
 import { LogList } from './LogList'
 import { ReminderSettings } from './ReminderSettings'
+import { AccountSection } from './AccountSection'
 
 /**
  * The main hydration card and log list. Pulls all state and actions from the
@@ -98,6 +99,11 @@ export function AppLayout() {
           onSizeChange={settings.setBottleSize}
           onGoalChange={settings.setDailyGoal}
         />
+
+        <div class="w-full h-px bg-white/8" />
+
+        {/* Optional account: the app is fully local until the user signs in here. */}
+        <AccountSection />
 
         {/* Schedule and reminder settings are irrelevant when reviewing a past day, so they're hidden unless today is selected. */}
         <Show when={history.isViewingToday()}>

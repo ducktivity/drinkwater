@@ -7,6 +7,194 @@
     "version": "1.0"
   },
   "paths": {
+    "/auth/me": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Returns the account for the supplied bearer token. Used by clients to validate a stored token on startup.",
+        "tags": ["auth"],
+        "summary": "Get the current user",
+        "responses": {
+          "200": {
+            "description": "The authenticated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/api.User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/request": {
+      "post": {
+        "description": "Sends a 6-digit login code to the given email, creating the account if it does not yet exist. Always returns a generic acknowledgement so the endpoint cannot be used to probe which emails have accounts.",
+        "tags": ["auth"],
+        "summary": "Request a login code",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/api.AuthRequestInput"
+              }
+            }
+          },
+          "description": "Email to send the login code to",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Generic acknowledgement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/api.MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body or email",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "A code was requested too recently",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/verify": {
+      "post": {
+        "description": "Exchanges a valid email + 6-digit code for a 30-day session token. Wrong guesses are capped per code; a successful verification consumes the code so it cannot be reused.",
+        "tags": ["auth"],
+        "summary": "Verify a login code",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/api.AuthVerifyInput"
+              }
+            }
+          },
+          "description": "Email and the 6-digit code",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Session token and the authenticated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/api.AuthResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body or email",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Code is wrong, expired, used up, or locked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/logs": {
       "get": {
         "description": "Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are no longer cached locally.",
@@ -148,7 +336,48 @@
     }
   ],
   "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "description": "Type \"Bearer\" followed by a space and the session token returned by /auth/verify.",
+        "type": "apiKey",
+        "name": "Authorization",
+        "in": "header"
+      }
+    },
     "schemas": {
+      "api.AuthRequestInput": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string"
+          }
+        }
+      },
+      "api.AuthResponse": {
+        "type": "object",
+        "required": ["token", "user"],
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/api.User"
+          }
+        }
+      },
+      "api.AuthVerifyInput": {
+        "type": "object",
+        "required": ["code", "email"],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        }
+      },
       "api.LogsResponse": {
         "type": "object",
         "required": ["logs"],
@@ -158,6 +387,15 @@
             "items": {
               "$ref": "#/components/schemas/api.WaterLog"
             }
+          }
+        }
+      },
+      "api.MessageResponse": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string"
           }
         }
       },
@@ -172,6 +410,18 @@
             }
           },
           "server_time": {
+            "type": "string"
+          }
+        }
+      },
+      "api.User": {
+        "type": "object",
+        "required": ["email", "id"],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "id": {
             "type": "string"
           }
         }

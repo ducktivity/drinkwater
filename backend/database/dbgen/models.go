@@ -9,6 +9,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AuthCode struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	CodeHash   string
+	ExpiresAt  pgtype.Timestamptz
+	ConsumedAt pgtype.Timestamptz
+	Attempts   int32
+	CreatedAt  pgtype.Timestamptz
+}
+
+type User struct {
+	ID        uuid.UUID
+	Email     string
+	CreatedAt pgtype.Timestamptz
+}
+
 type WaterLog struct {
 	ID              uuid.UUID
 	UserID          uuid.UUID

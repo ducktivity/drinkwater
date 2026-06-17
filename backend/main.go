@@ -14,7 +14,9 @@ import (
 	"syscall"
 	"time"
 
+	"drinkwater-backend/auth"
 	"drinkwater-backend/database"
+	"drinkwater-backend/email"
 	"drinkwater-backend/handlers"
 
 	"github.com/getsentry/sentry-go"
@@ -40,11 +42,14 @@ var (
 
 // config holds the runtime configuration sourced from environment variables.
 type config struct {
-	env       string     // ENV: prod | staging | development; tags every log + Sentry event
-	port      string     // PORT: TCP port to listen on
-	logLevel  slog.Level // LOG_LEVEL: debug | info | warn | error
-	logJSON   bool       // LOG_FORMAT: "json" (prod) or "text" (local dev pretty output)
-	sentryDSN string     // SENTRY_DSN: empty disables Sentry (no-op) for local dev
+	env          string     // ENV: prod | staging | development; tags every log + Sentry event
+	port         string     // PORT: TCP port to listen on
+	logLevel     slog.Level // LOG_LEVEL: debug | info | warn | error
+	logJSON      bool       // LOG_FORMAT: "json" (prod) or "text" (local dev pretty output)
+	sentryDSN    string     // SENTRY_DSN: empty disables Sentry (no-op) for local dev
+	authSecret   string     // AUTH_JWT_SECRET: signs session JWTs and peppers login codes
+	resendAPIKey string     // RESEND_API_KEY: empty logs login codes instead of emailing (dev)
+	emailFrom    string     // AUTH_EMAIL_FROM: From header for login emails, e.g. "Drinkwater <login@example.com>"
 }
 
 func loadConfig() config {
@@ -57,7 +62,14 @@ func loadConfig() config {
 		defaultLogFormat = "text"
 	}
 	return config{
+		env:          env,
+		port:         getenv("PORT", "8080"),
+		logLevel:     httplog.LevelByName(getenv("LOG_LEVEL", "info")),
 		logJSON:      getenv("LOG_FORMAT", defaultLogFormat) == "json",
+		sentryDSN:    os.Getenv("SENTRY_DSN"),
+		authSecret:   os.Getenv("AUTH_JWT_SECRET"),
+		resendAPIKey: os.Getenv("RESEND_API_KEY"),
+		emailFrom:    getenv("AUTH_EMAIL_FROM", "Drinkwater <onboarding@resend.dev>"),
 	}
 }
 
@@ -72,8 +84,17 @@ func getenv(key, fallback string) string {
 // @version 1.0
 // @description Local-first sync engine.
 // @BasePath /
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and the session token returned by /auth/verify.
 func main() {
 	resolveBuildInfo()
+
+	// Load .env before reading config so local dev can supply secrets (auth,
+	// Sentry, etc.) via the file. In prod, docker-compose injects these as real
+	// env vars and there is no .env for the Go process, so Load is a silent no-op.
+	godotenv.Load()
 	cfg := loadConfig()
 
 	// One logger powers everything: httplog uses it for per-request summaries,
@@ -106,7 +127,23 @@ func main() {
 	}
 	slog.SetDefault(logger.Logger)
 
-	godotenv.Load()
+	// Configure authentication. The secret signs session JWTs and peppers login
+	// codes, so it must be present outside local dev; fail fast rather than boot
+	// an instance that can mint forgeable tokens.
+	if cfg.authSecret == "" {
+		if cfg.env != "development" {
+			slog.Error("AUTH_JWT_SECRET is required outside development")
+			os.Exit(1)
+		}
+		slog.Warn("AUTH_JWT_SECRET is empty; using an insecure development default")
+		cfg.authSecret = "dev-insecure-secret-do-not-use-in-prod"
+	}
+	auth.SetSecret(cfg.authSecret)
+
+	// Wire the login-code email sender. With no RESEND_API_KEY (local dev) it logs
+	// codes instead of sending them.
+	handlers.EmailSender = email.NewSender(cfg.resendAPIKey, cfg.emailFrom)
+
 	database.Connect()
 
 	// Sentry captures stack traces, groups errors, and alerts. With an empty DSN
@@ -170,8 +207,18 @@ func main() {
 	router.Get("/readyz", handlers.Readyz)
 	router.Get("/health", handlers.Healthz) // legacy alias
 
-	router.Post("/sync", handlers.PostSync)
-	router.Get("/logs", handlers.GetLogs)
+	// Public auth endpoints: request a login code and exchange it for a token.
+	router.Post("/auth/request", handlers.PostAuthRequest)
+	router.Post("/auth/verify", handlers.PostAuthVerify)
+
+	// Everything that touches a user's data sits behind RequireAuth, which rejects
+	// requests without a valid bearer token and injects the user id downstream.
+	router.Group(func(r chi.Router) {
+		r.Use(auth.RequireAuth)
+		r.Get("/auth/me", handlers.GetMe)
+		r.Post("/sync", handlers.PostSync)
+		r.Get("/logs", handlers.GetLogs)
+	})
 
 	// Cancel the base context on SIGINT/SIGTERM so the server drains in-flight
 	// requests cleanly during a blue-green cutover instead of dropping them.

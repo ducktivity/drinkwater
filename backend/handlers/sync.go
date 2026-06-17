@@ -7,16 +7,12 @@ import (
 	"time"
 
 	"drinkwater-backend/api"
+	"drinkwater-backend/auth"
 	"drinkwater-backend/database"
 	"drinkwater-backend/database/dbgen"
 
-	"github.com/go-chi/httplog/v2"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
-
-// We use a dummy user ID until JWT authentication is implemented
-var dummyUserID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
 
 // PostSync godoc
 // @Summary      Sync local water logs with the server
@@ -33,9 +29,14 @@ var dummyUserID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
 func PostSync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Stamp the request-summary line with the acting user so logs can be filtered
-	// per user. Constant for now; ready for when JWT auth replaces dummyUserID.
-	httplog.LogEntrySetFields(ctx, map[string]interface{}{"user_id": dummyUserID.String()})
+	// The acting user comes from the verified bearer token (RequireAuth, which
+	// also stamps the request-summary line with this id).
+	userID, ok := auth.UserIDFromContext(ctx)
+	if !ok {
+		// RequireAuth guarantees a user; guard so a routing mistake fails closed.
+		clientError(w, r, http.StatusUnauthorized, "no user in context", `{"error": "Authentication required"}`)
+		return
+	}
 
 	// 1. Decode the standard JSON body directly into our API DTO
 	var incomingLogs []api.WaterLog
@@ -63,7 +64,7 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 	for _, log := range incomingLogs {
 		err := qtx.UpsertWaterLog(ctx, dbgen.UpsertWaterLogParams{
 			ID:              log.ID,
-			UserID:          dummyUserID,
+			UserID:          userID,
 			AmountMl:        log.AmountMl,
 			LoggedAt:        pgtype.Timestamptz{Time: log.LoggedAt, Valid: true},
 			IsDeleted:       log.IsDeleted,
@@ -89,7 +90,7 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 		}
 
 		dbLogs, err = qtx.GetDeltaWaterLogs(ctx, dbgen.GetDeltaWaterLogsParams{
-			UserID:          dummyUserID,
+			UserID:          userID,
 			ServerUpdatedAt: pgtype.Timestamptz{Time: sinceTime, Valid: true},
 		})
 		if err != nil {
@@ -110,7 +111,7 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 		windowEnd := startOfDay.AddDate(0, 0, 2)
 
 		rangeLogs, err := qtx.GetWaterLogsInRange(ctx, dbgen.GetWaterLogsInRangeParams{
-			UserID:     dummyUserID,
+			UserID:     userID,
 			LoggedAt:   pgtype.Timestamptz{Time: windowStart, Valid: true},
 			LoggedAt_2: pgtype.Timestamptz{Time: windowEnd, Valid: true},
 		})

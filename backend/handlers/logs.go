@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"drinkwater-backend/api"
+	"drinkwater-backend/auth"
 	"drinkwater-backend/database"
 	"drinkwater-backend/database/dbgen"
 
-	"github.com/go-chi/httplog/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -28,8 +28,14 @@ import (
 func GetLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Stamp the request-summary line with the acting user (constant for now).
-	httplog.LogEntrySetFields(ctx, map[string]interface{}{"user_id": dummyUserID.String()})
+	// The acting user comes from the verified bearer token (RequireAuth, which
+	// also stamps the request-summary line with this id).
+	userID, ok := auth.UserIDFromContext(ctx)
+	if !ok {
+		// RequireAuth guarantees a user; guard so a routing mistake fails closed.
+		clientError(w, r, http.StatusUnauthorized, "no user in context", `{"error": "Authentication required"}`)
+		return
+	}
 
 	// 1. Parse the half-open [from, to) range from the query string. Both bounds
 	// are required so the query is always scoped to a single day.
@@ -54,7 +60,7 @@ func GetLogs(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Query the day's non-deleted logs for the (dummy) user.
 	dbLogs, err := dbgen.New(database.DB).GetWaterLogsInRange(ctx, dbgen.GetWaterLogsInRangeParams{
-		UserID:     dummyUserID,
+		UserID:     userID,
 		LoggedAt:   pgtype.Timestamptz{Time: fromTime, Valid: true},
 		LoggedAt_2: pgtype.Timestamptz{Time: toTime, Valid: true},
 	})

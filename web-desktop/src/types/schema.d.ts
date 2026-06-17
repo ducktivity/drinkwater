@@ -4,6 +4,221 @@
  */
 
 export interface paths {
+  '/auth/me': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Get the current user
+     * @description Returns the account for the supplied bearer token. Used by clients to validate a stored token on startup.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description The authenticated user */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['api.User']
+          }
+        }
+        /** @description Missing or invalid token */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+        /** @description Internal server or database error */
+        500: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/auth/request': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Request a login code
+     * @description Sends a 6-digit login code to the given email, creating the account if it does not yet exist. Always returns a generic acknowledgement so the endpoint cannot be used to probe which emails have accounts.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      /** @description Email to send the login code to */
+      requestBody: {
+        content: {
+          'application/json': components['schemas']['api.AuthRequestInput']
+        }
+      }
+      responses: {
+        /** @description Generic acknowledgement */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['api.MessageResponse']
+          }
+        }
+        /** @description Invalid request body or email */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+        /** @description A code was requested too recently */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+        /** @description Internal server or database error */
+        500: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/auth/verify': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Verify a login code
+     * @description Exchanges a valid email + 6-digit code for a 30-day session token. Wrong guesses are capped per code; a successful verification consumes the code so it cannot be reused.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      /** @description Email and the 6-digit code */
+      requestBody: {
+        content: {
+          'application/json': components['schemas']['api.AuthVerifyInput']
+        }
+      }
+      responses: {
+        /** @description Session token and the authenticated user */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['api.AuthResponse']
+          }
+        }
+        /** @description Invalid request body or email */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+        /** @description Code is wrong, expired, used up, or locked */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+        /** @description Internal server or database error */
+        500: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/logs': {
     parameters: {
       query?: never
@@ -143,12 +358,30 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    'api.AuthRequestInput': {
+      email: string
+    }
+    'api.AuthResponse': {
+      token: string
+      user: components['schemas']['api.User']
+    }
+    'api.AuthVerifyInput': {
+      code: string
+      email: string
+    }
     'api.LogsResponse': {
       logs: components['schemas']['api.WaterLog'][]
+    }
+    'api.MessageResponse': {
+      message: string
     }
     'api.SyncResponse': {
       changes: components['schemas']['api.WaterLog'][]
       server_time: string
+    }
+    'api.User': {
+      email: string
+      id: string
     }
     'api.WaterLog': {
       amount_ml: number

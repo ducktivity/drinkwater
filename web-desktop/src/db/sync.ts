@@ -1,5 +1,6 @@
 import { db } from './db'
 import { apiClient } from './api'
+import { getToken } from './token'
 import { cleanupSyncedStaleLogs } from './cleanup'
 
 /**
@@ -9,6 +10,14 @@ import { cleanupSyncedStaleLogs } from './cleanup'
  * manual refresh button) can reflect the outcome in the UI.
  */
 export const syncEngine = async (): Promise<boolean> => {
+  // The single sync gate: with no session token the user has no account, so the
+  // app stays 100% local and never calls the backend. Because every sync trigger
+  // (app load, regained connectivity, after each log change) funnels through
+  // here, this one check keeps the whole client offline-only until sign-in.
+  if (!getToken()) {
+    return false
+  }
+
   try {
     console.log('🔄 Starting sync...')
 
