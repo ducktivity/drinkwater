@@ -1,6 +1,7 @@
 import { formatMl } from '../../utils'
 import { db, type LocalWaterLog } from '../../db/db'
 import { syncEngine } from '../../db/sync'
+import { logger } from '../../logger'
 import { useOverlay } from '../../context/OverlayContext'
 import { useHistory } from '../../context/HistoryContext'
 
@@ -49,7 +50,7 @@ export function DeleteLogDialog(props: Props) {
     await db.waterLogs.put(deleted)
     history.syncHistoryView(deleted)
     overlay.setLogPendingDeletion(null)
-    syncEngine().catch(console.error)
+    syncEngine().catch(logger.error)
   }
 
   return (

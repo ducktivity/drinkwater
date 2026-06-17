@@ -12,6 +12,7 @@ import { liveQuery } from 'dexie'
 import { db, type LocalWaterLog } from '../db/db'
 import { syncEngine } from '../db/sync'
 import { cleanupSyncedStaleLogs } from '../db/cleanup'
+import { logger } from '../logger'
 import { getTodayKey, toDateKey, compareLoggedAtDesc } from '../utils'
 import { savePersistedState, loadPersistedState } from '../state/persistence'
 import { useSettings } from './SettingsContext'
@@ -100,17 +101,17 @@ export function HydrationProvider(props: ParentProps) {
     // Subscribe to live changes in the local water log table
     const liveQuerySubscription = liveQuery(() =>
       db.waterLogs.filter((log) => !log.is_deleted).sortBy('logged_at'),
-    ).subscribe({ next: setWaterLogs, error: console.error })
+    ).subscribe({ next: setWaterLogs, error: logger.error })
 
     // Prune stale (non-today) synced logs that the UI never renders. Runs even
     // when offline, where the sync below would bail before its own cleanup step.
-    cleanupSyncedStaleLogs().catch(console.error)
+    cleanupSyncedStaleLogs().catch(logger.error)
 
     // Attempt an initial sync on app load
-    syncEngine().catch(console.error)
+    syncEngine().catch(logger.error)
 
     // Re-sync whenever the device regains network connectivity
-    const handleOnline = () => syncEngine().catch(console.error)
+    const handleOnline = () => syncEngine().catch(logger.error)
     window.addEventListener('online', handleOnline)
 
     onCleanup(() => {

@@ -6,6 +6,7 @@ import {
 } from '../../utils'
 import { db, type LocalWaterLog } from '../../db/db'
 import { syncEngine } from '../../db/sync'
+import { logger } from '../../logger'
 import { useOverlay } from '../../context/OverlayContext'
 import { useHistory } from '../../context/HistoryContext'
 import { NumberInput } from '../ui/NumberInput'
@@ -43,7 +44,7 @@ export function AddLogDialog() {
     await db.waterLogs.add(newLog)
     history.syncHistoryView(newLog)
     overlay.setIsAddingLog(false)
-    syncEngine().catch(console.error)
+    syncEngine().catch(logger.error)
   }
 
   return (

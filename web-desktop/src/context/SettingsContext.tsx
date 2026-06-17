@@ -15,6 +15,7 @@ import {
   type ReminderSettings as ReminderSettingsValue,
 } from '../reminder'
 import { loadPersistedState, savePersistedState } from '../state/persistence'
+import { logger } from '../logger'
 
 /** Configurable user settings: bottle size, daily goal, schedule, reminder. */
 interface SettingsContextValue {
@@ -109,7 +110,7 @@ export function SettingsProvider(props: ParentProps) {
    */
   function changeReminder(changes: Partial<ReminderSettingsValue>) {
     if (changes.enabled) {
-      ensureNotificationPermission().catch(console.error)
+      ensureNotificationPermission().catch(logger.error)
     }
     setReminder((prev) => ({ ...prev, ...changes }))
     savePersistedState({ reminder: reminder() })

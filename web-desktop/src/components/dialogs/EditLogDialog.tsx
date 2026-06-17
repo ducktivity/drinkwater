@@ -2,6 +2,7 @@ import { createSignal } from 'solid-js'
 import { toTimeInputValue, withTimeOfDay } from '../../utils'
 import { db, type LocalWaterLog } from '../../db/db'
 import { syncEngine } from '../../db/sync'
+import { logger } from '../../logger'
 import { useOverlay } from '../../context/OverlayContext'
 import { useHistory } from '../../context/HistoryContext'
 import { NumberInput } from '../ui/NumberInput'
@@ -54,7 +55,7 @@ export function EditLogDialog(props: Props) {
     await db.waterLogs.put(updated)
     history.syncHistoryView(updated)
     overlay.setLogBeingEdited(null)
-    syncEngine().catch(console.error)
+    syncEngine().catch(logger.error)
   }
 
   return (

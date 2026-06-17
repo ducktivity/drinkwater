@@ -7,6 +7,7 @@ import {
 } from 'solid-js'
 import { db, type LocalWaterLog } from '../db/db'
 import { syncEngine } from '../db/sync'
+import { logger } from '../logger'
 import { savePersistedState } from '../state/persistence'
 import { useSettings } from './SettingsContext'
 import { useHydration } from './HydrationContext'
@@ -118,7 +119,7 @@ export function OverlayProvider(props: ParentProps) {
     hydration.setSettledFillFraction(1)
     setIsConfirmVisible(false)
     savePersistedState({ fillFraction: 1 })
-    syncEngine().catch(console.error)
+    syncEngine().catch(logger.error)
   }
 
   /** Dismisses the confirm dialog and restores the bottle to the level captured when it opened. */

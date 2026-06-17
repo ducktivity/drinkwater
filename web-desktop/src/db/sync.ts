@@ -2,6 +2,7 @@ import { db } from './db'
 import { apiClient, getRequestId } from './api'
 import { getToken } from './token'
 import { cleanupSyncedStaleLogs } from './cleanup'
+import { logger } from '../logger'
 
 /**
  * The outcome of a sync attempt. `ok` is true on a successful round-trip. On a
@@ -31,7 +32,7 @@ export const syncEngine = async (): Promise<SyncResult> => {
   }
 
   try {
-    console.log('🔄 Starting sync...')
+    logger.log('🔄 Starting sync...')
 
     // 1. Get the last time we synced from local storage
     const lastSync = localStorage.getItem('last_sync_time')
@@ -62,7 +63,7 @@ export const syncEngine = async (): Promise<SyncResult> => {
 
     if (error) {
       const requestId = getRequestId(response)
-      console.error('❌ Sync API rejected the request:', error, { requestId })
+      logger.error('❌ Sync API rejected the request:', error, { requestId })
       return { ok: false, requestId }
     }
 
@@ -89,13 +90,13 @@ export const syncEngine = async (): Promise<SyncResult> => {
     if (data.server_time) {
       localStorage.setItem('last_sync_time', data.server_time)
     }
-    console.log(`✅ Sync complete! Server time: ${data.server_time}`)
+    logger.log(`✅ Sync complete! Server time: ${data.server_time}`)
 
     // 7. Now that local logs are confirmed on the server, drop stale (non-today)
     // synced entries so IndexedDB doesn't accumulate data the UI never renders.
     const removed = await cleanupSyncedStaleLogs()
     if (removed > 0) {
-      console.log(`🧹 Cleaned up ${removed} stale synced log(s).`)
+      logger.log(`🧹 Cleaned up ${removed} stale synced log(s).`)
     }
 
     return { ok: true }
@@ -103,7 +104,7 @@ export const syncEngine = async (): Promise<SyncResult> => {
     // If we are offline, fetch fails here. We just catch it silently.
     // The user doesn't care, they are local-first! No response means no request
     // id to surface.
-    console.warn('📶 Offline: Sync deferred until connection is restored.', err)
+    logger.warn('📶 Offline: Sync deferred until connection is restored.', err)
     return { ok: false }
   }
 }

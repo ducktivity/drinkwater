@@ -16,6 +16,7 @@ import {
   type AuthUser,
 } from '../db/auth'
 import { syncEngine } from '../db/sync'
+import { logger } from '../logger'
 
 /**
  * Authentication state for the app. Sign-in is optional: the app is fully usable
@@ -53,7 +54,7 @@ export function AuthProvider(props: ParentProps) {
       return result.error
     }
     setUser(result.user)
-    syncEngine().catch(console.error)
+    syncEngine().catch(logger.error)
     return null
   }
 
@@ -72,7 +73,7 @@ export function AuthProvider(props: ParentProps) {
         .then((restored) => {
           if (restored) setUser(restored)
         })
-        .catch(console.error)
+        .catch(logger.error)
     }
 
     // The API client dispatches this when any authenticated request gets a 401,

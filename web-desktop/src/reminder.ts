@@ -1,4 +1,5 @@
 import { createEffect, onCleanup } from 'solid-js'
+import { logger } from './logger'
 
 /**
  * User-configurable settings for the gentle drink-water reminder: a periodic
@@ -95,7 +96,7 @@ async function fireReminder(): Promise<void> {
       }
       await forceWindowToFront()
     } catch (error) {
-      console.error('Failed to fire desktop reminder', error)
+      logger.error('Failed to fire desktop reminder', error)
     }
     return
   }

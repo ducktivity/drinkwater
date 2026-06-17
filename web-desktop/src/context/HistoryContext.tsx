@@ -13,6 +13,7 @@ import { RequestError } from '../db/api'
 import { getTodayKey, compareLoggedAtDesc } from '../utils'
 import { useHydration } from './HydrationContext'
 import { useToast } from './ToastContext'
+import { logger } from '../logger'
 
 /** History view: the day being viewed and its logs (today live, past fetched). */
 interface HistoryContextValue {
@@ -98,7 +99,7 @@ export function HistoryProvider(props: ParentProps) {
         if (isStale()) return
         setHistoryLogs(reconciled)
       } catch (err) {
-        console.error(err)
+        logger.error(err)
         if (isStale()) return
         // The local view is already on screen, so only surface an error when we
         // had nothing local to show; otherwise a failed reconcile is silent.
