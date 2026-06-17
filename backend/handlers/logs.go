@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -83,7 +82,5 @@ func GetLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 4. Send the successful JSON response.
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(api.LogsResponse{Logs: logs})
+	writeJSON(w, http.StatusOK, api.LogsResponse{Logs: logs})
 }

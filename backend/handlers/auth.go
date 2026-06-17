@@ -245,10 +245,3 @@ func GetMe(w http.ResponseWriter, r *http.Request) {
 func invalidCode(w http.ResponseWriter, r *http.Request, cause string) {
 	clientError(w, r, http.StatusUnauthorized, cause, `{"error": "Invalid or expired code"}`)
 }
-
-// writeJSON writes a value as a JSON response with the given status code.
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
-}

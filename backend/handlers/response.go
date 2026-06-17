@@ -1,11 +1,21 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/go-chi/httplog/v2"
 )
+
+// writeJSON writes a value as a JSON response with the given status code. It is
+// the single success-path response writer shared by every handler so the
+// Content-Type header, status code, and encoding stay consistent.
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}
 
 // clientError records a client-caused failure (4xx) and returns a JSON error to
 // the caller. The cause is attached to the single request-summary line emitted

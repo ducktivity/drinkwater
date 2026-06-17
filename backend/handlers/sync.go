@@ -146,9 +146,7 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 7. Send the successful JSON response
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(api.SyncResponse{
+	writeJSON(w, http.StatusOK, api.SyncResponse{
 		Changes:    outgoingLogs,
 		ServerTime: serverNow, // The client will save this and use it as 'since' next time
 	})
