@@ -1,32 +1,29 @@
+import { useOverlay } from '../../context/OverlayContext'
 import { SyncButton } from './SyncButton'
-
-interface Props {
-  /** Runs a manual sync; resolves the outcome so SyncButton can show feedback. */
-  onSync: () => Promise<boolean>
-  /** Opens the settings drawer (preferences, schedule, reminders, account). */
-  onOpenSettings: () => void
-}
 
 /**
  * The app's top bar: brand on the left, and the manual-sync control plus a
  * settings button on the right. Its inner content is constrained to the same
  * max width as the main card so the brand aligns with the card's left edge.
+ * Opens the settings drawer through the overlay context.
  */
-export function Navbar(props: Props) {
+export function Navbar() {
+  const overlay = useOverlay()
+
   return (
-    <header class="sticky top-0 z-40 w-full border-b border-white/8 bg-[#0f1117]/85 backdrop-blur">
+    <header class="sticky top-0 z-40 w-full border-b border-white/8 bg-[#0f1117]/85 backdrop-blur-sm">
       <div class="mx-auto flex w-full max-w-105 items-center justify-between px-4 py-3">
         <div class="text-[15px] font-semibold text-[#f0f2f7]">
           💧 Drinkwater
         </div>
 
         <div class="flex items-center gap-1">
-          <SyncButton onSync={props.onSync} />
+          <SyncButton />
 
           <button
             type="button"
             aria-label="Settings"
-            onClick={props.onOpenSettings}
+            onClick={overlay.openSettings}
             class="text-[#7a7f96] hover:text-sky-400 cursor-pointer p-1 leading-none transition-colors"
           >
             <svg

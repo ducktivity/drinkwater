@@ -3,20 +3,11 @@ import {
   evaluateSchedule,
   type CheckpointState,
   type CheckpointStatus,
-  type ScheduleCheckpoint,
-} from '../schedule'
-import { NumberInput } from './ui/NumberInput'
-import { TimeInput } from './ui/TimeInput'
-
-interface Props {
-  schedule: () => ScheduleCheckpoint[]
-  totalMl: () => number
-  now: () => Date
-  /** Applies a partial change to one checkpoint (fine-grained, in place). */
-  onUpdateCheckpoint: (id: string, changes: Partial<ScheduleCheckpoint>) => void
-  onRemoveCheckpoint: (id: string) => void
-  onAddCheckpoint: () => void
-}
+} from '../../schedule'
+import { useSettings } from '../../context/SettingsContext'
+import { useHydration } from '../../context/HydrationContext'
+import { NumberInput } from '../ui/NumberInput'
+import { TimeInput } from '../ui/TimeInput'
 
 /** Text colour for a checkpoint's status dot/label by state. */
 const STATE_STYLES: Record<CheckpointState, string> = {
@@ -36,8 +27,12 @@ const STATE_LABELS: Record<CheckpointState, string> = {
  * Editable list of timed hydration checkpoints. Each row sets a deadline time
  * and the cumulative millilitres expected by then; rows can be added or removed.
  * A live status badge shows whether each checkpoint is met, missed, or upcoming.
+ * Reads the schedule and today's total from context and edits in place.
  */
-export function ScheduleSettings(props: Props) {
+export function ScheduleSettings() {
+  const settings = useSettings()
+  const hydration = useHydration()
+
   // Status of every checkpoint, looked up by id. We render rows in the
   // schedule's stable insertion order (not sorted by time) so that editing a
   // checkpoint's time never reorders the list and steals focus from the input;
@@ -45,9 +40,9 @@ export function ScheduleSettings(props: Props) {
   const statusById = createMemo(() => {
     const map = new Map<string, CheckpointStatus>()
     for (const status of evaluateSchedule(
-      props.schedule(),
-      props.totalMl(),
-      props.now(),
+      settings.schedule(),
+      hydration.totalMlConsumedToday(),
+      settings.now(),
     )) {
       map.set(status.id, status)
     }
@@ -58,7 +53,7 @@ export function ScheduleSettings(props: Props) {
     <div class="w-full flex flex-col gap-2.5">
       <span class="text-[13px] text-[#7a7f96]">Hydration schedule</span>
 
-      <For each={props.schedule()}>
+      <For each={settings.schedule()}>
         {(checkpoint) => {
           const status = () => statusById().get(checkpoint.id)
           return (
@@ -67,7 +62,7 @@ export function ScheduleSettings(props: Props) {
                 <TimeInput
                   value={checkpoint.time}
                   onValueChange={(time) =>
-                    props.onUpdateCheckpoint(checkpoint.id, { time })
+                    settings.updateCheckpoint(checkpoint.id, { time })
                   }
                 />
                 <NumberInput
@@ -76,7 +71,7 @@ export function ScheduleSettings(props: Props) {
                   unit="ml"
                   fallback={0}
                   onValueChange={(targetMl) =>
-                    props.onUpdateCheckpoint(checkpoint.id, { targetMl })
+                    settings.updateCheckpoint(checkpoint.id, { targetMl })
                   }
                 />
 
@@ -90,7 +85,7 @@ export function ScheduleSettings(props: Props) {
                     type="button"
                     aria-label="Remove checkpoint"
                     class="text-[#7a7f96] hover:text-red-400 cursor-pointer p-0.5 leading-none transition-colors"
-                    onClick={() => props.onRemoveCheckpoint(checkpoint.id)}
+                    onClick={() => settings.removeCheckpoint(checkpoint.id)}
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -125,7 +120,7 @@ export function ScheduleSettings(props: Props) {
       <button
         type="button"
         class="w-full py-2 rounded-[10px] border border-white/8 bg-[#222535] text-[13px] font-medium text-[#7a7f96] cursor-pointer hover:text-[#f0f2f7] transition-colors"
-        onClick={props.onAddCheckpoint}
+        onClick={settings.addCheckpoint}
       >
         + Add checkpoint
       </button>

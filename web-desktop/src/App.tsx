@@ -1,7 +1,7 @@
 import { AppProvider } from './context/AppProvider'
-import { AppLayout } from './components/AppLayout'
-import { AppDialogs } from './components/AppDialogs'
-import { ToastContainer } from './components/ToastContainer'
+import { AppLayout } from './components/layout/AppLayout'
+import { AppDialogs } from './components/dialogs/AppDialogs'
+import { ToastContainer } from './components/feedback/ToastContainer'
 
 /**
  * App root: wraps the UI in the composed context provider (configurable

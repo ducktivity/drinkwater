@@ -1,34 +1,40 @@
 import { createMemo, Show } from 'solid-js'
-import { formatClockTime, formatMl } from '../utils'
+import { formatClockTime, formatMl } from '../../utils'
 import {
   evaluateSchedule,
   getMostRecentMissed,
   getNextCheckpoint,
-  type ScheduleCheckpoint,
-} from '../schedule'
-
-interface Props {
-  schedule: () => ScheduleCheckpoint[]
-  totalMl: () => number
-  now: () => Date
-}
+} from '../../schedule'
+import { useSettings } from '../../context/SettingsContext'
+import { useHydration } from '../../context/HydrationContext'
+import { useHistory } from '../../context/HistoryContext'
 
 /**
  * Prominent banner that tells the user where they stand against their timed
  * hydration schedule: a strong warning when a deadline has been missed, or the
- * next goal (how much more to drink, and by when) otherwise.
+ * next goal (how much more to drink, and by when) otherwise. Only meaningful on
+ * the live day, so it renders nothing while viewing a past day. Pulls the
+ * schedule, today's total, and the ticking clock from context.
  */
-export function ScheduleGoalBanner(props: Props) {
+export function ScheduleGoalBanner() {
+  const settings = useSettings()
+  const hydration = useHydration()
+  const history = useHistory()
+
   const statuses = createMemo(() =>
-    evaluateSchedule(props.schedule(), props.totalMl(), props.now()),
+    evaluateSchedule(
+      settings.schedule(),
+      hydration.totalMlConsumedToday(),
+      settings.now(),
+    ),
   )
 
   const missed = createMemo(() => getMostRecentMissed(statuses()))
   const nextCheckpoint = createMemo(() => getNextCheckpoint(statuses()))
 
-  // Nothing to show when no schedule is configured.
+  // Only applies to the live day, and only when a schedule is configured.
   return (
-    <Show when={props.schedule().length > 0}>
+    <Show when={history.isViewingToday() && settings.schedule().length > 0}>
       <Show
         when={missed()}
         fallback={

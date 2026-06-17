@@ -1,6 +1,6 @@
 import { createSignal, Show } from 'solid-js'
-import { useAuth } from '../context/AuthContext'
-import { LoginDialog } from './dialogs/LoginDialog'
+import { useAuth } from '../../context/AuthContext'
+import { LoginDialog } from '../dialogs/LoginDialog'
 
 /**
  * The account row in the settings area: a "Sign in to sync" entry when logged

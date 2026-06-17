@@ -1,26 +1,22 @@
 import { Show } from 'solid-js'
-import { getTodayKey, shiftDateKey, formatFullDay } from '../utils'
-
-interface Props {
-  /** The currently selected day as a YYYY-MM-DD key. */
-  selectedDate: () => string
-  /** Called with the newly selected day key when the user navigates. */
-  onSelect: (dateKey: string) => void
-}
+import { getTodayKey, shiftDateKey, formatFullDay } from '../../utils'
+import { useHistory } from '../../context/HistoryContext'
 
 /**
  * Day picker for the hydration history view. Lets the user step back/forward a
  * day with the arrows or jump to any past date with the native date input.
- * Forward navigation is capped at today since future days have no logs.
+ * Forward navigation is capped at today since future days have no logs. Reads
+ * and drives the selected day through the history context.
  */
-export function DateNavigator(props: Props) {
-  const isToday = () => props.selectedDate() === getTodayKey()
+export function DateNavigator() {
+  const history = useHistory()
+  const isToday = () => history.selectedDate() === getTodayKey()
 
   /** Steps the selected day by the given delta, never past today. */
   function step(dayDelta: number) {
-    const next = shiftDateKey(props.selectedDate(), dayDelta)
+    const next = shiftDateKey(history.selectedDate(), dayDelta)
     if (next > getTodayKey()) return
-    props.onSelect(next)
+    history.setSelectedDate(next)
   }
 
   return (
@@ -47,7 +43,7 @@ export function DateNavigator(props: Props) {
 
       <div class="text-sm font-semibold text-[#f0f2f7]">
         <Show when={!isToday()} fallback="Today">
-          {formatFullDay(props.selectedDate())}
+          {formatFullDay(history.selectedDate())}
         </Show>
       </div>
 

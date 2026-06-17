@@ -1,17 +1,9 @@
 import { createEffect, onCleanup, type JSX } from 'solid-js'
-import { useSettings } from '../context/SettingsContext'
-import { useHydration } from '../context/HydrationContext'
+import { useOverlay } from '../../context/OverlayContext'
 import { AccountSection } from './AccountSection'
 import { SettingsSection } from './SettingsSection'
 import { ScheduleSettings } from './ScheduleSettings'
 import { ReminderSettings } from './ReminderSettings'
-
-interface Props {
-  /** Whether the drawer is currently open. */
-  isOpen: () => boolean
-  /** Closes the drawer (backdrop click, the X button, or Escape). */
-  onClose: () => void
-}
 
 /** A labelled group of related settings within the drawer. */
 function Section(props: { title: string; children: JSX.Element }) {
@@ -28,21 +20,20 @@ function Section(props: { title: string; children: JSX.Element }) {
 /**
  * A right-anchored slide-over panel holding everything that used to clutter the
  * main card: the account row, bottle/goal preferences, the hydration schedule,
- * and reminder settings. Pulls its own state from context so the layout stays
- * unaware of settings internals. Closes on backdrop click, the X, or Escape,
- * and locks body scroll while open.
+ * and reminder settings. Reads its open state from the overlay context and each
+ * section pulls its own state from context, so the drawer only arranges them.
+ * Closes on backdrop click, the X, or Escape, and locks body scroll while open.
  */
-export function SettingsDrawer(props: Props) {
-  const settings = useSettings()
-  const hydration = useHydration()
+export function SettingsDrawer() {
+  const overlay = useOverlay()
 
   // While open: lock background scroll and let Escape close the drawer. The
-  // effect re-runs whenever isOpen flips, cleaning up the listener/lock each time.
+  // effect re-runs whenever isSettingsOpen flips, cleaning up the listener/lock each time.
   createEffect(() => {
-    if (!props.isOpen()) return
+    if (!overlay.isSettingsOpen()) return
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') props.onClose()
+      if (event.key === 'Escape') overlay.closeSettings()
     }
     document.addEventListener('keydown', handleKeyDown)
     document.body.style.overflow = 'hidden'
@@ -56,17 +47,17 @@ export function SettingsDrawer(props: Props) {
   return (
     <div
       class="fixed inset-0 z-50"
-      classList={{ 'pointer-events-none': !props.isOpen() }}
-      aria-hidden={!props.isOpen()}
+      classList={{ 'pointer-events-none': !overlay.isSettingsOpen() }}
+      aria-hidden={!overlay.isSettingsOpen()}
     >
       {/* Backdrop: fades in and intercepts clicks to dismiss. */}
       <div
         class="absolute inset-0 bg-black/65 transition-opacity duration-200"
         classList={{
-          'opacity-100': props.isOpen(),
-          'opacity-0': !props.isOpen(),
+          'opacity-100': overlay.isSettingsOpen(),
+          'opacity-0': !overlay.isSettingsOpen(),
         }}
-        onClick={props.onClose}
+        onClick={overlay.closeSettings}
       />
 
       {/* Panel: slides in from the right. */}
@@ -74,10 +65,10 @@ export function SettingsDrawer(props: Props) {
         role="dialog"
         aria-modal="true"
         aria-label="Settings"
-        class="absolute right-0 top-0 flex h-full w-full max-w-95 flex-col border-l border-white/8 bg-[#1a1d26] shadow-2xl transition-transform duration-200 ease-out"
+        class="absolute right-0 top-0 flex size-full max-w-95 flex-col border-l border-white/8 bg-[#1a1d26] shadow-2xl transition-transform duration-200 ease-out"
         classList={{
-          'translate-x-0': props.isOpen(),
-          'translate-x-full': !props.isOpen(),
+          'translate-x-0': overlay.isSettingsOpen(),
+          'translate-x-full': !overlay.isSettingsOpen(),
         }}
       >
         <div class="flex items-center justify-between border-b border-white/8 px-5 py-4">
@@ -85,7 +76,7 @@ export function SettingsDrawer(props: Props) {
           <button
             type="button"
             aria-label="Close settings"
-            onClick={props.onClose}
+            onClick={overlay.closeSettings}
             class="text-[#7a7f96] hover:text-[#f0f2f7] cursor-pointer p-1 leading-none transition-colors"
           >
             <svg
@@ -110,30 +101,15 @@ export function SettingsDrawer(props: Props) {
           </Section>
 
           <Section title="Preferences">
-            <SettingsSection
-              size={settings.bottleSize}
-              goal={settings.dailyGoal}
-              onSizeChange={settings.setBottleSize}
-              onGoalChange={settings.setDailyGoal}
-            />
+            <SettingsSection />
           </Section>
 
           <Section title="Hydration schedule">
-            <ScheduleSettings
-              schedule={settings.schedule}
-              totalMl={hydration.totalMlConsumedToday}
-              now={settings.now}
-              onUpdateCheckpoint={settings.updateCheckpoint}
-              onRemoveCheckpoint={settings.removeCheckpoint}
-              onAddCheckpoint={settings.addCheckpoint}
-            />
+            <ScheduleSettings />
           </Section>
 
           <Section title="Reminders">
-            <ReminderSettings
-              settings={settings.reminder}
-              onChange={settings.changeReminder}
-            />
+            <ReminderSettings />
           </Section>
         </div>
       </aside>

@@ -12,11 +12,18 @@ import { useSettings } from './SettingsContext'
 import { useHydration } from './HydrationContext'
 
 /**
- * UI overlay state: the four dialogs' visibility (and the entity each acts on).
- * Each dialog owns its own save/confirm logic; the context only holds the shared
- * state and the bottle-flow handlers that open/resolve the confirm dialog.
+ * UI overlay state: the slide-over settings drawer and the four dialogs'
+ * visibility (and the entity each acts on). Each dialog owns its own
+ * save/confirm logic; the context only holds the shared state and the
+ * bottle-flow handlers that open/resolve the confirm dialog.
  */
 interface OverlayContextValue {
+  /** Whether the slide-over settings drawer is open. */
+  isSettingsOpen: Accessor<boolean>
+  /** Opens the settings drawer (preferences, schedule, reminders, account). */
+  openSettings: () => void
+  /** Closes the settings drawer. */
+  closeSettings: () => void
   /** Whether the confirm-drink dialog is open. */
   isConfirmVisible: Accessor<boolean>
   /** Millilitres the confirm dialog will commit when accepted. */
@@ -46,6 +53,9 @@ const OverlayContext = createContext<OverlayContextValue>()
 export function OverlayProvider(props: ParentProps) {
   const settings = useSettings()
   const hydration = useHydration()
+
+  // Whether the slide-over settings drawer is open.
+  const [isSettingsOpen, setIsSettingsOpen] = createSignal(false)
 
   const [isConfirmVisible, setIsConfirmVisible] = createSignal(false)
   // Millilitres the confirm dialog will commit when accepted. This is the full
@@ -120,6 +130,9 @@ export function OverlayProvider(props: ParentProps) {
   }
 
   const value: OverlayContextValue = {
+    isSettingsOpen,
+    openSettings: () => setIsSettingsOpen(true),
+    closeSettings: () => setIsSettingsOpen(false),
     isConfirmVisible,
     pendingLogMl,
     logPendingDeletion,

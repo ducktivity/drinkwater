@@ -1,9 +1,9 @@
 import { Show } from 'solid-js'
-import { useOverlay } from '../context/OverlayContext'
-import { ConfirmLogDialog } from './dialogs/ConfirmLogDialog'
-import { DeleteLogDialog } from './dialogs/DeleteLogDialog'
-import { EditLogDialog } from './dialogs/EditLogDialog'
-import { AddLogDialog } from './dialogs/AddLogDialog'
+import { useOverlay } from '../../context/OverlayContext'
+import { ConfirmLogDialog } from './ConfirmLogDialog'
+import { DeleteLogDialog } from './DeleteLogDialog'
+import { EditLogDialog } from './EditLogDialog'
+import { AddLogDialog } from './AddLogDialog'
 
 /**
  * Renders the four modal dialogs, gated by the overlay context's visibility
@@ -16,11 +16,7 @@ export function AppDialogs() {
   return (
     <>
       <Show when={overlay.isConfirmVisible()}>
-        <ConfirmLogDialog
-          amountMl={overlay.pendingLogMl}
-          onConfirm={overlay.handleLogConfirm}
-          onCancel={overlay.handleLogCancel}
-        />
+        <ConfirmLogDialog />
       </Show>
 
       <Show when={overlay.logBeingEdited()}>

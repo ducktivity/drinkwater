@@ -1,5 +1,9 @@
 import { Show, onMount, onCleanup } from 'solid-js'
-import { clamp } from '../utils'
+import { clamp } from '../../utils'
+import { useSettings } from '../../context/SettingsContext'
+import { useHydration } from '../../context/HydrationContext'
+import { useHistory } from '../../context/HistoryContext'
+import { useOverlay } from '../../context/OverlayContext'
 
 // ─── SVG layout constants ────────────────────────────────────────────────────
 // All measurements are in SVG user-units (the viewBox is SVG_W × SVG_H).
@@ -35,44 +39,41 @@ function computeWaterSurfaceY(fillFraction: number) {
   return ORIGIN_Y + BODY_TOP + (1 - fillFraction) * BODY_H
 }
 
-interface Props {
-  size: () => number
-  fillFraction: () => number
-  onFillFractionChange: (newFillFraction: number) => void
-  /** Called when the user releases the drag at or below the empty threshold. */
-  onBottleEmptied: () => void
-  /** Called when the user releases a drag above the empty threshold, to commit the resting level. */
-  onDragSettled: () => void
-  /** Called when the user taps "Log drank" to log the amount consumed so far without emptying the bottle. */
-  onLogDrank: () => void
-  /**
-   * Whether the bottle responds to drags. Defaults to true. When false (e.g.
-   * viewing a past day), the bottle is a static, full visual with no controls,
-   * since dragging would log against today rather than the day being viewed.
-   */
-  interactive?: () => boolean
-}
+/**
+ * The draggable hydration bottle. Reads the active-bottle level and bottle size
+ * from context and routes drag/commit gestures back through the hydration and
+ * overlay contexts. On a past day it shows a static, full bottle with no
+ * controls, since dragging would log against today rather than the day viewed.
+ */
+export function BottleSection() {
+  const settings = useSettings()
+  const hydration = useHydration()
+  const history = useHistory()
+  const overlay = useOverlay()
 
-export function BottleSection(props: Props) {
-  /** Whether drag interaction is enabled (defaults to true when prop omitted). */
-  const isInteractive = () => props.interactive?.() ?? true
+  /** Bottle volume in ml. */
+  const size = () => settings.bottleSize()
+  /** Drag interaction is only enabled on the live day. */
+  const isInteractive = () => history.isViewingToday()
+  /** Live level on the live day; a static, full bottle on past days. */
+  const fillFraction = () =>
+    history.isViewingToday() ? hydration.fillFraction() : 1
 
   /** Whether a drag interaction is currently in progress. */
   let isDragging = false
   let svgElement!: SVGSVGElement
 
-  const waterSurfaceY = () => computeWaterSurfaceY(props.fillFraction())
+  const waterSurfaceY = () => computeWaterSurfaceY(fillFraction())
 
   /** Millilitres drunk from the active bottle so far (full size minus the remaining level), rounded. */
-  const mlDrankSoFar = () =>
-    Math.round((1 - props.fillFraction()) * props.size())
+  const mlDrankSoFar = () => Math.round((1 - fillFraction()) * size())
 
   /** Human-readable label shown below the bottle describing the current fill level. */
   const bottleLevelLabel = () => {
-    const fraction = props.fillFraction()
-    if (fraction >= 0.99) return `Full bottle · ${props.size()} ml`
+    const fraction = fillFraction()
+    if (fraction >= 0.99) return `Full bottle · ${size()} ml`
     if (fraction <= 0.01) return 'Almost done — release to log!'
-    return `${Math.round(fraction * props.size())} ml remaining`
+    return `${Math.round(fraction * size())} ml remaining`
   }
 
   /**
@@ -88,7 +89,8 @@ export function BottleSection(props: Props) {
 
   function handleDragMove(clientY: number) {
     if (!isDragging) return
-    props.onFillFractionChange(pointerClientYToFillFraction(clientY))
+    // Live drag updates: move the bottle visual without touching the daily total.
+    hydration.handleFillFractionChange(pointerClientYToFillFraction(clientY))
   }
 
   function handleDragEnd(clientY: number) {
@@ -97,9 +99,9 @@ export function BottleSection(props: Props) {
     // Trigger the "bottle emptied" flow when the user releases near the bottom,
     // otherwise commit the resting level so it can fold into today's total.
     if (pointerClientYToFillFraction(clientY) <= 0.05) {
-      props.onBottleEmptied()
+      overlay.handleBottleEmptied()
     } else {
-      props.onDragSettled()
+      hydration.handleDragSettled()
     }
   }
 
@@ -174,7 +176,7 @@ export function BottleSection(props: Props) {
             width={BOTTLE_W}
             height={ORIGIN_Y + BODY_BOT - waterSurfaceY()}
             fill={
-              props.fillFraction() > 0.05
+              fillFraction() > 0.05
                 ? 'rgba(56,189,248,0.42)'
                 : 'rgba(56,189,248,0.12)'
             }
@@ -182,9 +184,7 @@ export function BottleSection(props: Props) {
           />
 
           {/* Animated water-surface ripple — hidden when full or empty */}
-          <Show
-            when={props.fillFraction() > 0.015 && props.fillFraction() < 0.99}
-          >
+          <Show when={fillFraction() > 0.015 && fillFraction() < 0.99}>
             <path
               d={`M ${ORIGIN_X} ${waterSurfaceY()} q ${BOTTLE_W / 4} -3 ${BOTTLE_W / 2} 0 q ${BOTTLE_W / 4} 3 ${BOTTLE_W / 2} 0`}
               fill="none"
@@ -209,7 +209,7 @@ export function BottleSection(props: Props) {
             height={CAP_H}
             rx="5"
             fill={
-              props.fillFraction() > 0.5
+              fillFraction() > 0.5
                 ? 'rgba(56,189,248,0.55)'
                 : 'rgba(255,255,255,0.12)'
             }
@@ -224,12 +224,12 @@ export function BottleSection(props: Props) {
             font-weight="600"
             font-family="-apple-system, BlinkMacSystemFont, sans-serif"
             fill={
-              props.fillFraction() > 0.18
+              fillFraction() > 0.18
                 ? 'rgba(255,255,255,0.9)'
                 : 'rgba(255,255,255,0.35)'
             }
           >
-            {Math.round(props.fillFraction() * 100)}%
+            {Math.round(fillFraction() * 100)}%
           </text>
         </svg>
 
@@ -259,7 +259,7 @@ export function BottleSection(props: Props) {
       <Show when={isInteractive() && mlDrankSoFar() > 0}>
         <button
           class="px-4 py-2 rounded-[10px] border border-white/10 bg-[#222535] text-[13px] font-semibold text-[#f0f2f7] cursor-pointer"
-          onClick={() => props.onLogDrank()}
+          onClick={() => overlay.handleLogDrank()}
         >
           Log {mlDrankSoFar()} ml drank
         </button>

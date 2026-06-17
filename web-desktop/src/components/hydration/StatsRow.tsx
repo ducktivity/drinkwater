@@ -1,9 +1,6 @@
-import { formatMl } from '../utils'
-
-interface Props {
-  totalMl: () => number
-  goal: () => number
-}
+import { formatMl } from '../../utils'
+import { useHistory } from '../../context/HistoryContext'
+import { useSettings } from '../../context/SettingsContext'
 
 /**
  * Renders a single stat tile with a muted label and a bold value.
@@ -23,15 +20,23 @@ const renderStatCard = (
 )
 
 /**
- * Displays today's hydration progress: the amount drunk, how far it is toward
- * the daily goal (as a percentage), and the goal itself.
+ * Displays the selected day's hydration progress: the amount drunk, how far it
+ * is toward the daily goal (as a percentage), and the goal itself. Reads the
+ * day's total and goal straight from context.
  */
-export function StatsRow(props: Props) {
+export function StatsRow() {
+  const history = useHistory()
+  const settings = useSettings()
+
+  /** Millilitres consumed on the selected day. */
+  const totalMl = () => history.selectedDayTotalMl()
+  /** The daily hydration goal in ml. */
+  const goal = () => settings.dailyGoal()
+
   /** Percentage of the daily goal reached so far (0 when no goal is set). */
   const goalProgressPercent = () => {
-    const goal = props.goal()
-    if (goal <= 0) return 0
-    return Math.round((props.totalMl() / goal) * 100)
+    if (goal() <= 0) return 0
+    return Math.round((totalMl() / goal()) * 100)
   }
 
   /** Whether the user has met or exceeded today's goal. */
@@ -39,17 +44,13 @@ export function StatsRow(props: Props) {
 
   return (
     <div class="w-full grid grid-cols-3 gap-2.5">
-      {renderStatCard(
-        'Drank today',
-        () => formatMl(props.totalMl()),
-        'text-sky-400',
-      )}
+      {renderStatCard('Drank today', () => formatMl(totalMl()), 'text-sky-400')}
       {renderStatCard(
         'Of goal',
         () => `${goalProgressPercent()}%`,
         isGoalReached() ? 'text-emerald-400' : 'text-[#f0f2f7]',
       )}
-      {renderStatCard('Goal', () => formatMl(props.goal()))}
+      {renderStatCard('Goal', () => formatMl(goal()))}
     </div>
   )
 }

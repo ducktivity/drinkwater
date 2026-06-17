@@ -1,35 +1,37 @@
 import { For, Show } from 'solid-js'
-import type { LocalWaterLog } from '../db/db'
-import { formatTime, formatMl } from '../utils'
+import { formatTime, formatMl, formatFullDay } from '../../utils'
+import { useHistory } from '../../context/HistoryContext'
+import { useOverlay } from '../../context/OverlayContext'
 
-interface Props {
-  /** Section heading (e.g. "Today's Progress" or the selected day's label). */
-  title: string
-  /** Time-descending array of the day's individual water log entries. */
-  logs: () => LocalWaterLog[]
-  /** Called when the user requests to edit a specific log entry. */
-  onEdit: (log: LocalWaterLog) => void
-  /** Called when the user requests deletion of a specific log entry. */
-  onDelete: (log: LocalWaterLog) => void
-  /** When provided, renders an "Add log" button that invokes this callback. */
-  onAdd?: () => void
-  /** When true, shows a loading placeholder instead of the entries. */
-  isLoading?: () => boolean
-}
+/**
+ * Renders the selected day's individual hydration log entries with edit/delete
+ * controls. Reads the entries (today's live logs or a fetched past day) from the
+ * history context and routes edit/delete/add intents through the overlay
+ * context. On past days it also offers an "Add log" button to back-fill a
+ * forgotten entry; today's logs are captured through the bottle instead.
+ */
+export function LogList() {
+  const history = useHistory()
+  const overlay = useOverlay()
 
-/** Renders a day's individual hydration log entries with edit/delete controls. */
-export function LogList(props: Props) {
+  /** Section heading: a friendly "today" label, or the past day's full date. */
+  const title = () =>
+    history.isViewingToday()
+      ? "Today's Progress"
+      : formatFullDay(history.selectedDate())
+
   return (
     <div class="w-full max-w-105 mt-5">
       <div class="flex items-center justify-between mb-2.5 px-0.5">
         <div class="text-[13px] font-semibold text-[#7a7f96] uppercase tracking-[0.5px]">
-          {props.title}
+          {title()}
         </div>
-        <Show when={props.onAdd}>
+        {/* Back-filling only applies to past days; today is logged via the bottle. */}
+        <Show when={!history.isViewingToday()}>
           <button
             type="button"
             class="flex items-center gap-1 text-[13px] font-semibold text-sky-400 cursor-pointer"
-            onClick={() => props.onAdd?.()}
+            onClick={() => overlay.setIsAddingLog(true)}
           >
             <svg
               width="15"
@@ -50,20 +52,20 @@ export function LogList(props: Props) {
 
       <div class="flex flex-col gap-1.5">
         <Show
-          when={!props.isLoading?.()}
+          when={!history.isLoadingHistory()}
           fallback={
             <div class="text-[13px] text-[#7a7f96] py-2.5 px-4">Loading…</div>
           }
         >
           <Show
-            when={props.logs().length > 0}
+            when={history.displayedLogs().length > 0}
             fallback={
               <div class="text-[13px] text-[#7a7f96] py-2.5 px-4">
                 Nothing logged for this day.
               </div>
             }
           >
-            <For each={props.logs()}>
+            <For each={history.displayedLogs()}>
               {(log) => (
                 <div class="bg-[#1a1d26] border border-white/8 rounded-[10px] py-2.5 px-4 flex items-center justify-between gap-3">
                   <span class="text-sm font-medium">
@@ -77,7 +79,7 @@ export function LogList(props: Props) {
                       type="button"
                       aria-label="Edit log"
                       class="text-[#7a7f96] hover:text-sky-400 cursor-pointer p-0.5 leading-none transition-colors"
-                      onClick={() => props.onEdit(log)}
+                      onClick={() => overlay.setLogBeingEdited(log)}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -98,7 +100,7 @@ export function LogList(props: Props) {
                       type="button"
                       aria-label="Delete log"
                       class="text-[#7a7f96] hover:text-red-400 cursor-pointer p-0.5 leading-none transition-colors"
-                      onClick={() => props.onDelete(log)}
+                      onClick={() => overlay.setLogPendingDeletion(log)}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"

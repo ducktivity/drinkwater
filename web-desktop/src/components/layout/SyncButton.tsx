@@ -1,12 +1,6 @@
 import { Show, createSignal, onCleanup } from 'solid-js'
-
-interface Props {
-  /**
-   * Triggers a sync round-trip. Resolves `true` on success and `false` on
-   * failure/offline so the button can show the right feedback.
-   */
-  onSync: () => Promise<boolean>
-}
+import { syncEngine } from '../../db/sync'
+import { useToast } from '../../context/ToastContext'
 
 /** How long the "synced" checkmark lingers before reverting to the refresh icon. */
 const SYNCED_FEEDBACK_MS = 1000
@@ -15,9 +9,11 @@ const SYNCED_FEEDBACK_MS = 1000
  * A manual sync control. Tapping it pushes the current bottle state to the
  * backend: the refresh icon spins while syncing, then briefly becomes a green
  * checkmark on success before returning to the idle refresh icon. Repeated taps
- * are ignored while a sync is already in flight.
+ * are ignored while a sync is already in flight. Runs the sync itself and
+ * surfaces a toast on failure, distinguishing being offline from a real error.
  */
-export function SyncButton(props: Props) {
+export function SyncButton() {
+  const toast = useToast()
   const [status, setStatus] = createSignal<'idle' | 'syncing' | 'synced'>(
     'idle',
   )
@@ -30,13 +26,22 @@ export function SyncButton(props: Props) {
     if (status() === 'syncing') return
 
     setStatus('syncing')
-    const succeeded = await props.onSync()
+    const succeeded = await syncEngine()
 
     if (succeeded) {
       setStatus('synced')
       revertTimer = setTimeout(() => setStatus('idle'), SYNCED_FEEDBACK_MS)
     } else {
       setStatus('idle')
+      // Distinguish being offline (changes are queued locally) from a backend error.
+      if (!navigator.onLine) {
+        toast.showToast(
+          "You're offline — your changes will sync once you're back online.",
+          'info',
+        )
+      } else {
+        toast.showToast('Sync failed. Please try again.', 'error')
+      }
     }
   }
 

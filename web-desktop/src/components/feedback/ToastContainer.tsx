@@ -1,5 +1,5 @@
 import { For, Show } from 'solid-js'
-import { useToast, type Toast } from '../context/ToastContext'
+import { useToast, type Toast } from '../../context/ToastContext'
 
 /** Per-type accent colour for the toast's left border and icon. */
 const ACCENT: Record<Toast['type'], string> = {

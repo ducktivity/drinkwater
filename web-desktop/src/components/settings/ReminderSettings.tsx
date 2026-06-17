@@ -1,22 +1,17 @@
 import { Show } from 'solid-js'
-import {
-  isNotificationSupported,
-  type ReminderSettings as ReminderSettingsValue,
-} from '../reminder'
-import { NumberInput } from './ui/NumberInput'
-import { ToggleSwitch } from './ui/ToggleSwitch'
-
-interface Props {
-  settings: () => ReminderSettingsValue
-  /** Applies a partial change to the reminder settings. */
-  onChange: (changes: Partial<ReminderSettingsValue>) => void
-}
+import { isNotificationSupported } from '../../reminder'
+import { useSettings } from '../../context/SettingsContext'
+import { NumberInput } from '../ui/NumberInput'
+import { ToggleSwitch } from '../ui/ToggleSwitch'
 
 /**
  * Settings for the gentle drink-water reminder: a toggle plus the interval
  * between nudges. The interval input is only shown while the reminder is on.
+ * Reads and updates the reminder settings through the settings context.
  */
-export function ReminderSettings(props: Props) {
+export function ReminderSettings() {
+  const settings = useSettings()
+
   return (
     <div class="w-full flex flex-col gap-2.5">
       <Show when={!isNotificationSupported()}>
@@ -27,20 +22,22 @@ export function ReminderSettings(props: Props) {
       </Show>
 
       <ToggleSwitch
-        checked={props.settings().enabled}
+        checked={settings.reminder().enabled}
         label="Remind me to drink"
-        onChange={(enabled) => props.onChange({ enabled })}
+        onChange={(enabled) => settings.changeReminder({ enabled })}
       />
 
-      <Show when={props.settings().enabled}>
+      <Show when={settings.reminder().enabled}>
         <div class="flex items-center justify-between gap-2.5 pl-3">
           <span class="text-[13px] text-[#7a7f96]">Every</span>
           <NumberInput
-            value={props.settings().intervalMin}
+            value={settings.reminder().intervalMin}
             step={5}
             unit="min"
             fallback={30}
-            onValueChange={(intervalMin) => props.onChange({ intervalMin })}
+            onValueChange={(intervalMin) =>
+              settings.changeReminder({ intervalMin })
+            }
           />
         </div>
       </Show>
