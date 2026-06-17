@@ -1,7 +1,7 @@
 import { createEffect, onCleanup, type JSX } from 'solid-js'
 import { useOverlay } from '../../context/OverlayContext'
 import { AccountSection } from './AccountSection'
-import { SettingsSection } from './SettingsSection'
+import { GoalSettingsSection } from './GoalSettingsSection'
 import { ScheduleSettings } from './ScheduleSettings'
 import { ReminderSettings } from './ReminderSettings'
 
@@ -101,7 +101,7 @@ export function SettingsDrawer() {
           </Section>
 
           <Section title="Preferences">
-            <SettingsSection />
+            <GoalSettingsSection />
           </Section>
 
           <Section title="Hydration schedule">

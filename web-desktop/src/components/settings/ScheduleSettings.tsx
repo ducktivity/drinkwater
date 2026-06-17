@@ -51,8 +51,6 @@ export function ScheduleSettings() {
 
   return (
     <div class="w-full flex flex-col gap-2.5">
-      <span class="text-[13px] text-[#7a7f96]">Hydration schedule</span>
-
       <For each={settings.schedule()}>
         {(checkpoint) => {
           const status = () => statusById().get(checkpoint.id)

@@ -32,7 +32,7 @@ export function NumberInput(props: Props) {
         type="number"
         value={props.value}
         step={props.step}
-        class="bg-[#222535] border border-white/8 rounded-lg text-[#f0f2f7] text-sm font-medium sm:w-18 w-14 py-1.5 px-2.5 text-right outline-none"
+        class="bg-[#222535] border border-white/8 rounded-lg text-[#f0f2f7] text-sm font-medium w-18 py-1.5 px-2.5 text-right outline-none"
         onChange={(e) => !props.eager && handle(e)}
         onInput={(e) => props.eager && handle(e)}
       />

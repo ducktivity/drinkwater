@@ -2,7 +2,7 @@ import { useSettings } from '../../context/SettingsContext'
 import { NumberInput } from '../ui/NumberInput'
 
 /** Renders the bottle-size and daily-goal number inputs, bound to settings context. */
-export function SettingsSection() {
+export function GoalSettingsSection() {
   const settings = useSettings()
 
   return (
