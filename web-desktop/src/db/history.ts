@@ -16,13 +16,38 @@ function localDayRange(dateKey: string): { from: string; to: string } {
 }
 
 /**
+ * Reads the locally-stored (IndexedDB) water logs for a single local day.
+ *
+ * Fast and fully offline-safe: it never touches the network, so days still inside
+ * the local retention window — and any unsynced edits/additions for older days —
+ * render instantly. Returns the day's non-deleted logs sorted most-recent-first.
+ * The backend reconciliation in {@link fetchLogsForDate} fills in days that have
+ * already been pruned from IndexedDB.
+ */
+export async function readLocalLogsForDate(
+  dateKey: string,
+): Promise<LocalWaterLog[]> {
+  const { from, to } = localDayRange(dateKey)
+
+  const localLogs = await db.waterLogs
+    .where('logged_at')
+    .between(from, to, true, false)
+    .toArray()
+
+  return localLogs.filter((log) => !log.is_deleted).sort(compareLoggedAtDesc)
+}
+
+/**
  * Fetches the water logs for a single local day for display in the history view.
  *
- * Historical (non-today) synced logs are pruned from IndexedDB, so the backend is
- * the source of truth for past days. We still merge in any logs that live locally
- * for that day — chiefly local edits/additions that haven't been pushed yet — so
- * unsynced changes remain visible even before the next sync completes. When an id
- * exists both locally and remotely, the local copy wins (it may hold a pending edit).
+ * Synced logs older than the local retention window are pruned from IndexedDB, so
+ * the backend is the source of truth for those past days. We still merge in any
+ * logs that live locally for that day — chiefly local edits/additions that haven't
+ * been pushed yet, plus recent days still inside the retention window — so unsynced
+ * changes remain visible even before the next sync completes. When an id exists both
+ * locally and remotely, the local copy wins (it may hold a pending edit). Throws if
+ * the backend request fails (e.g. offline); callers should fall back to the local
+ * view from {@link readLocalLogsForDate}.
  *
  * Returns the day's non-deleted logs sorted most-recent-first.
  */

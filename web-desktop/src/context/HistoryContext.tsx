@@ -8,7 +8,7 @@ import {
   type ParentProps,
 } from 'solid-js'
 import { type LocalWaterLog } from '../db/db'
-import { fetchLogsForDate } from '../db/history'
+import { fetchLogsForDate, readLocalLogsForDate } from '../db/history'
 import { getTodayKey, compareLoggedAtDesc } from '../utils'
 import { useHydration } from './HydrationContext'
 import { useToast } from './ToastContext'
@@ -63,10 +63,14 @@ export function HistoryProvider(props: ParentProps) {
   )
 
   /**
-   * Fetches a past day's logs whenever the user navigates to one, with a loading
-   * state. Today needs no fetch — its logs come live from IndexedDB. The selected
-   * date is re-checked in each callback so a slow fetch can't clobber a newer
-   * selection (race guard).
+   * Loads a past day's logs whenever the user navigates to one. Today needs no
+   * load — its logs come live from IndexedDB.
+   *
+   * Two-phase so recent/offline days appear instantly: first paint whatever is
+   * already in IndexedDB (local retention window plus any unsynced edits), then
+   * reconcile against the backend (authoritative for pruned/other-device logs).
+   * The selected date is re-checked in each step so a slow load can't clobber a
+   * newer selection (race guard).
    */
   createEffect(() => {
     const date = selectedDate()
@@ -75,15 +79,29 @@ export function HistoryProvider(props: ParentProps) {
       setIsLoadingHistory(false)
       return
     }
+
+    const isStale = () => selectedDate() !== date
     setIsLoadingHistory(true)
-    fetchLogsForDate(date)
-      .then((logs) => {
-        if (selectedDate() === date) setHistoryLogs(logs)
-      })
-      .catch((err) => {
+
+    void (async () => {
+      // Phase 1 — instant paint from IndexedDB so logs within the retention
+      // window (and unsynced changes) render immediately, even while offline.
+      const localLogs = await readLocalLogsForDate(date)
+      if (isStale()) return
+      setHistoryLogs(localLogs)
+
+      // Phase 2 — reconcile against the backend, the source of truth for days
+      // already pruned from IndexedDB and for changes from other devices.
+      try {
+        const reconciled = await fetchLogsForDate(date)
+        if (isStale()) return
+        setHistoryLogs(reconciled)
+      } catch (err) {
         console.error(err)
-        if (selectedDate() === date) {
-          setHistoryLogs([])
+        if (isStale()) return
+        // The local view is already on screen, so only surface an error when we
+        // had nothing local to show; otherwise a failed reconcile is silent.
+        if (localLogs.length === 0) {
           if (!navigator.onLine) {
             toast.showToast(
               "You're offline — this day's logs can't be loaded right now.",
@@ -96,10 +114,10 @@ export function HistoryProvider(props: ParentProps) {
             )
           }
         }
-      })
-      .finally(() => {
-        if (selectedDate() === date) setIsLoadingHistory(false)
-      })
+      } finally {
+        if (!isStale()) setIsLoadingHistory(false)
+      }
+    })()
   })
 
   /**
