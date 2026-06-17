@@ -164,19 +164,24 @@ func main() {
 
 	router := chi.NewRouter()
 
-	// Middleware order is outer -> inner. RequestID/RealIP feed httplog and
-	// Sentry; httplog wraps everything so it records the final status (incl. the
-	// 500 written by Recoverer). Sentry sits inside Recoverer with Repanic:true
-	// so a panic is captured-with-stacktrace and then re-panicked up to Recoverer,
-	// which turns it into a clean 500.
-	router.Use(middleware.RequestID)
-	// Echo the request id (the same value httplog records as "requestID") onto the
-	// response so the frontend can show it to users for support reports. chi's
-	// RequestID middleware only stashes the id in the context; it never writes a
-	// response header, so we do it here.
-	router.Use(echoRequestID)
+	// Middleware order is outer -> inner. RealIP feeds httplog/Sentry; httplog
+	// wraps everything so it records the final status (incl. the 500 written by
+	// Recoverer). Sentry sits inside Recoverer with Repanic:true so a panic is
+	// captured-with-stacktrace and then re-panicked up to Recoverer, which turns
+	// it into a clean 500.
+	//
+	// We deliberately do NOT register middleware.RequestID ourselves: httplog's
+	// RequestLogger already chains it internally and logs that id as "requestID".
+	// Adding our own would assign a *different* id (advancing the counter twice
+	// per request), so the id we echo to the client wouldn't match the logged one.
 	router.Use(middleware.RealIP)
 	router.Use(httplog.RequestLogger(logger))
+	// Echo the request id onto the response so the frontend can show it to users
+	// for support reports. This runs *after* RequestLogger so it reads the exact
+	// id httplog generated and logged as "requestID" — keeping the user-visible
+	// code and the log line in lockstep. chi's RequestID middleware only stashes
+	// the id in the context; it never writes a response header, so we do it here.
+	router.Use(echoRequestID)
 	// Development only: attach the request body to each request summary so you can
 	// see exactly what the client sent. Bodies can carry user data, so this never
 	// runs in staging/prod. It must sit inside RequestLogger, which puts the log
@@ -319,10 +324,11 @@ func devRequestBodyLogger(next http.Handler) http.Handler {
 }
 
 // echoRequestID copies the chi request id into the X-Request-Id response header.
-// It must run after middleware.RequestID (which puts the id in the context) so the
-// id matches the "requestID" field httplog records — letting support cross-reference
-// a code the user reports against the exact log line. The header is set before the
-// handler writes the body, so it survives even on error responses.
+// It must run after httplog.RequestLogger (which internally runs middleware.RequestID
+// and logs the id as "requestID") so the header carries the exact same id — letting
+// support cross-reference a code the user reports against the exact log line. The
+// header is set before the handler writes the body, so it survives even on error
+// responses.
 func echoRequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
