@@ -1,12 +1,20 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/go-chi/httplog/v2"
 )
+
+// statusClientClosedRequest is nginx's non-standard 499 code, used when the
+// client closes the connection before the server finishes. We reuse it so a
+// client-cancelled request is recorded with a non-5xx status and therefore is
+// not logged at Error level nor reported to Sentry.
+const statusClientClosedRequest = 499
 
 // writeJSON writes a value as a JSON response with the given status code. It is
 // the single success-path response writer shared by every handler so the
@@ -36,6 +44,23 @@ func clientError(w http.ResponseWriter, r *http.Request, status int, cause, clie
 // Error level for the 5xx status.
 func serverError(w http.ResponseWriter, r *http.Request, err error, clientJSON string) {
 	ctx := r.Context()
+
+	// The client disconnected mid-request (app backgrounded, network dropped, a
+	// newer sync superseded this one). The request context is dead, so the DB
+	// layer surfaces context.Canceled. This is not a server fault: skip Sentry,
+	// record it under a non-5xx status so the request summary is not logged at
+	// Error level, and don't bother writing a body nobody is reading. The
+	// ctx.Err() guard ensures we only silence cancellations that came from the
+	// client going away, not an internal context.Canceled bubbling up.
+	if errors.Is(err, context.Canceled) && ctx.Err() != nil {
+		httplog.LogEntrySetFields(ctx, map[string]interface{}{
+			"error":            err.Error(),
+			"client_cancelled": true,
+		})
+		w.WriteHeader(statusClientClosedRequest)
+		return
+	}
+
 	fields := map[string]interface{}{"error": err.Error()}
 
 	// CaptureException is a no-op when Sentry is unconfigured (empty DSN in dev),
