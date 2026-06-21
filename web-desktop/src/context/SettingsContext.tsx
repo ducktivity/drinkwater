@@ -1,5 +1,6 @@
 import {
   createContext,
+  createEffect,
   createSignal,
   onCleanup,
   onMount,
@@ -7,7 +8,7 @@ import {
   type Accessor,
   type ParentProps,
 } from 'solid-js'
-import { createStore } from 'solid-js/store'
+import { createStore, reconcile } from 'solid-js/store'
 import { type ScheduleCheckpoint } from '../schedule'
 import {
   createReminderEngine,
@@ -15,6 +16,12 @@ import {
   type ReminderSettings as ReminderSettingsValue,
 } from '../reminder'
 import { loadPersistedState, savePersistedState } from '../state/persistence'
+import {
+  fetchSettings,
+  pushSettings,
+  type SyncableSettings,
+} from '../db/settings'
+import { useAuth } from './AuthContext'
 import { logger } from '../logger'
 
 /** Configurable user settings: bottle size, daily goal, schedule, reminder. */
@@ -61,14 +68,66 @@ export function SettingsProvider(props: ParentProps) {
   // requiring user interaction.
   const [now, setNow] = createSignal(new Date())
 
+  const auth = useAuth()
+
+  /** Snapshots the account-bound settings (the subset synced to the backend). */
+  function buildSyncableSettings(): SyncableSettings {
+    return {
+      size: bottleSize(),
+      goal: dailyGoal(),
+      schedule,
+      reminder: reminder(),
+    }
+  }
+
+  // Debounce backend pushes so a burst of edits (e.g. dragging a checkpoint or
+  // rapid goal taps) collapses into a single best-effort write. Cleared on
+  // unmount so a pending push never fires after teardown.
+  let pushTimer: ReturnType<typeof setTimeout> | undefined
+  function schedulePush() {
+    if (!auth.isLoggedIn()) return
+    if (pushTimer) clearTimeout(pushTimer)
+    pushTimer = setTimeout(() => {
+      pushSettings(buildSyncableSettings()).catch(logger.error)
+    }, 500)
+  }
+  onCleanup(() => {
+    if (pushTimer) clearTimeout(pushTimer)
+  })
+
+  /**
+   * Applies settings fetched from the server into local state. Writes the
+   * underlying signal/store setters directly (not the public mutators) and
+   * persists them, deliberately skipping {@link schedulePush} so loading from the
+   * server does not echo straight back as a write.
+   */
+  function applyServerSettings(serverSettings: SyncableSettings) {
+    setBottleSizeSignal(serverSettings.size)
+    setDailyGoalSignal(serverSettings.goal)
+    // reconcile replaces the whole schedule store with the server snapshot —
+    // including dropping any extra trailing checkpoints — while keeping object
+    // identity for checkpoints whose id is unchanged (a plain-array assignment
+    // would merge by index and leave a stale tail).
+    setSchedule(reconcile(serverSettings.schedule))
+    setReminder(serverSettings.reminder)
+    savePersistedState({
+      size: serverSettings.size,
+      goal: serverSettings.goal,
+      schedule: serverSettings.schedule,
+      reminder: serverSettings.reminder,
+    })
+  }
+
   function setBottleSize(newSize: number) {
     setBottleSizeSignal(newSize)
     savePersistedState({ size: newSize })
+    schedulePush()
   }
 
   function setDailyGoal(newGoal: number) {
     setDailyGoalSignal(newGoal)
     savePersistedState({ goal: newGoal })
+    schedulePush()
   }
 
   /**
@@ -86,12 +145,14 @@ export function SettingsProvider(props: ParentProps) {
       )
     }
     savePersistedState({ schedule })
+    schedulePush()
   }
 
   /** Removes a checkpoint from the schedule. */
   function removeCheckpoint(id: string) {
     setSchedule((prev) => prev.filter((checkpoint) => checkpoint.id !== id))
     savePersistedState({ schedule })
+    schedulePush()
   }
 
   /** Appends a new midday checkpoint the user can then adjust. */
@@ -101,6 +162,7 @@ export function SettingsProvider(props: ParentProps) {
       { id: crypto.randomUUID(), time: '12:00', targetMl: 1000 },
     ])
     savePersistedState({ schedule })
+    schedulePush()
   }
 
   /**
@@ -114,10 +176,39 @@ export function SettingsProvider(props: ParentProps) {
     }
     setReminder((prev) => ({ ...prev, ...changes }))
     savePersistedState({ reminder: reminder() })
+    schedulePush()
   }
 
   // Wire up the gentle drink-water reminder.
   createReminderEngine({ settings: reminder })
+
+  // Load the account's saved settings once per sign-in (server wins). When the
+  // account has no settings yet (a definitive 404 → null), seed it from the
+  // current local settings so this device's configuration becomes the account
+  // default. A non-definitive failure (offline, 5xx, …) rejects and is logged,
+  // leaving local state untouched and un-seeded. Runs for both fresh logins and
+  // restored sessions, since both flip auth.user() from null to a value.
+  let settingsLoaded = false
+  createEffect(() => {
+    const currentUser = auth.user()
+    if (!currentUser) {
+      // Signed out: re-arm so the next sign-in reloads from the server.
+      settingsLoaded = false
+      return
+    }
+    if (settingsLoaded) return
+    settingsLoaded = true
+    fetchSettings()
+      .then((serverSettings) => {
+        if (serverSettings) {
+          applyServerSettings(serverSettings)
+        } else {
+          // No settings on the account yet: seed from local.
+          pushSettings(buildSyncableSettings()).catch(logger.error)
+        }
+      })
+      .catch(logger.error)
+  })
 
   onMount(() => {
     // Advance the clock every 30s so schedule deadlines update on their own.

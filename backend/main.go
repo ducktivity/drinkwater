@@ -233,6 +233,8 @@ func main() {
 		r.Get("/auth/me", handlers.GetMe)
 		r.Post("/sync", handlers.PostSync)
 		r.Get("/logs", handlers.GetLogs)
+		r.Get("/settings", handlers.GetSettings)
+		r.Put("/settings", handlers.PutSettings)
 	})
 
 	// Cancel the base context on SIGINT/SIGTERM so the server drains in-flight

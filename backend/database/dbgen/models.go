@@ -25,6 +25,12 @@ type User struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type UserSetting struct {
+	UserID          uuid.UUID
+	Settings        []byte
+	ServerUpdatedAt pgtype.Timestamptz
+}
+
 type WaterLog struct {
 	ID              uuid.UUID
 	UserID          uuid.UUID

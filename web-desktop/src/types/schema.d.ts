@@ -285,6 +285,139 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/settings': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Get the current user's UI settings
+     * @description Returns the user's saved UI settings document (bottle size, daily goal, schedule, reminder). Responds 404 when the account has no settings yet, so the client keeps its local fallback values.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description The user's saved settings document */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['api.UserSettings']
+          }
+        }
+        /** @description Missing or invalid token */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+        /** @description No settings saved for this user yet */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+        /** @description Internal server or database error */
+        500: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+      }
+    }
+    /**
+     * Save the current user's UI settings
+     * @description Upserts the user's UI settings document (stored verbatim as JSON). Creates the row on first save.
+     */
+    put: {
+      parameters: {
+        query?: never
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      /** @description The settings document to save */
+      requestBody: {
+        content: {
+          'application/json': components['schemas']['api.UserSettings']
+        }
+      }
+      responses: {
+        /** @description The saved settings document */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['api.UserSettings']
+          }
+        }
+        /** @description Invalid request body */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+        /** @description Missing or invalid token */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+        /** @description Internal server or database error */
+        500: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              [key: string]: string
+            }
+          }
+        }
+      }
+    }
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/sync': {
     parameters: {
       query?: never
@@ -382,6 +515,9 @@ export interface components {
     'api.User': {
       email: string
       id: string
+    }
+    'api.UserSettings': {
+      settings: Record<string, never>
     }
     'api.WaterLog': {
       amount_ml: number

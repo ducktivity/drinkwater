@@ -260,6 +260,141 @@
         }
       }
     },
+    "/settings": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Returns the user's saved UI settings document (bottle size, daily goal, schedule, reminder). Responds 404 when the account has no settings yet, so the client keeps its local fallback values.",
+        "tags": ["settings"],
+        "summary": "Get the current user's UI settings",
+        "responses": {
+          "200": {
+            "description": "The user's saved settings document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/api.UserSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No settings saved for this user yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Upserts the user's UI settings document (stored verbatim as JSON). Creates the row on first save.",
+        "tags": ["settings"],
+        "summary": "Save the current user's UI settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/api.UserSettings"
+              }
+            }
+          },
+          "description": "The settings document to save",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The saved settings document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/api.UserSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server or database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sync": {
       "post": {
         "description": "Pushes local changes (upserts) to the server and pulls remote changes (delta) made on other devices.",
@@ -423,6 +558,15 @@
           },
           "id": {
             "type": "string"
+          }
+        }
+      },
+      "api.UserSettings": {
+        "type": "object",
+        "required": ["settings"],
+        "properties": {
+          "settings": {
+            "type": "object"
           }
         }
       },
