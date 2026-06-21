@@ -27,8 +27,9 @@ func Connect() {
 	// Neon's pooled URL from the box's .env; locally it falls back to the line below.
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
-		// Default fallback for running a local Postgres container
-		connStr = "postgres://postgres:postgres@localhost:5432/drinkwater?sslmode=disable"
+		// Default fallback for running a local Postgres container. These are
+		// throwaway localhost dev credentials, not a real secret.
+		connStr = "postgres://postgres:postgres@localhost:5432/drinkwater?sslmode=disable" // #nosec G101 -- local-dev fallback, no real credential
 	}
 
 	config, err := pgxpool.ParseConfig(connStr)

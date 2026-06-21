@@ -48,6 +48,23 @@ jobs:
       - name: go test
         run: go test ./...
 
+      # staticcheck via its official action (by Staticcheck's own author). It
+      # supports working-directory, so it cleanly targets our backend submodule.
+      # install-go: false reuses the Go set up above instead of installing twice.
+      - name: staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: latest
+          install-go: false
+          working-directory: backend
+
+      # gosec is pinned in go.mod (go tool), matching scripts/check.sh. We do not
+      # use securego/gosec's official action: it is a Docker container action with
+      # only an `args` input and always runs at the repo root, so it cannot target
+      # a Go module that lives in a subdirectory (our module is backend/).
+      - name: gosec
+        run: go tool gosec -quiet ./...
+
   image:
     name: Build & push image to GHCR
     needs: check

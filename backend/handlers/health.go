@@ -16,7 +16,7 @@ import (
 // is an operational endpoint, not part of the client-consumed API.
 func Healthz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
+	_, _ = w.Write([]byte("ok"))
 }
 
 // Readyz is the readiness probe: it returns 200 only when the database is
@@ -38,5 +38,5 @@ func Readyz(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ready"))
+	_, _ = w.Write([]byte("ready"))
 }

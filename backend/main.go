@@ -94,7 +94,7 @@ func main() {
 	// Load .env before reading config so local dev can supply secrets (auth,
 	// Sentry, etc.) via the file. In prod, docker-compose injects these as real
 	// env vars and there is no .env for the Go process, so Load is a silent no-op.
-	godotenv.Load()
+	_ = godotenv.Load()
 	cfg := loadConfig()
 
 	// One logger powers everything: httplog uses it for per-request summaries,
@@ -174,7 +174,7 @@ func main() {
 	// RequestLogger already chains it internally and logs that id as "requestID".
 	// Adding our own would assign a *different* id (advancing the counter twice
 	// per request), so the id we echo to the client wouldn't match the logged one.
-	router.Use(middleware.RealIP)
+
 	router.Use(httplog.RequestLogger(logger))
 	// Echo the request id onto the response so the frontend can show it to users
 	// for support reports. This runs *after* RequestLogger so it reads the exact
@@ -240,7 +240,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	srv := &http.Server{Addr: ":" + cfg.port, Handler: router}
+	srv := &http.Server{
+		Addr:    ":" + cfg.port,
+		Handler: router,
+		// Bound how long a client may take to send request headers so a slow or
+		// stalled connection cannot tie up a goroutine indefinitely (Slowloris).
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 
 	go func() {
 		slog.Info("starting Drinkwater server", "port", cfg.port, "env", cfg.env, "version", version, "commit", shortCommit(commit))

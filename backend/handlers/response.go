@@ -22,7 +22,10 @@ const statusClientClosedRequest = 499
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	// The status header is already on the wire, so an encode failure (e.g. the
+	// client hung up) cannot be turned into a different response — there is
+	// nothing actionable to do but drop it.
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 // clientError records a client-caused failure (4xx) and returns a JSON error to
