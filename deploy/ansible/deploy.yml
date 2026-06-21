@@ -19,6 +19,31 @@
         mode: "0600"
       register: env_file
 
+    - name: Apply expand-only migrations (one-shot goose container)
+      # The app image is distroless (a single static binary, no goose), so run the
+      # goose version pinned in backend/go.mod from a throwaway golang container.
+      # It mounts the box's backend checkout read-only (go.mod + go.sum + sql/schema)
+      # and invokes `go tool goose`. Migrations are expand-only (architecture.md §7
+      # Release Harmony), so applying them BEFORE the image swap below is safe for the
+      # still-running backend. The DB string is passed via GOOSE_DBSTRING (container
+      # env) rather than on argv so it never lands in the box's process list. A named
+      # volume caches Go's module + build artifacts so repeat deploys don't re-fetch
+      # and recompile goose every time.
+      ansible.builtin.command:
+        cmd: >
+          docker run --rm
+          -v {{ app_dir }}/backend:/src:ro
+          -v drinkwater_go_cache:/go
+          -w /src
+          -e GOCACHE=/go/.cache
+          -e GOOSE_DRIVER=postgres
+          -e GOOSE_DBSTRING={{ vault_database_url }}
+          {{ go_image }}
+          go tool goose -dir sql/schema up
+        chdir: "{{ app_dir }}"
+      register: migrate
+      changed_when: "'OK' in migrate.stdout or 'OK' in migrate.stderr"
+
     - name: Pull the published images
       ansible.builtin.command:
         cmd: docker compose pull

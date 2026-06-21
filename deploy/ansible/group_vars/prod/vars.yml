@@ -5,6 +5,11 @@ repo_branch: main
 # Moving "latest" by default; set to a sha-<gitsha> to pin/rollback a build.
 image_tag: latest
 
+# Throwaway image used to run goose migrations on the box (the app image is
+# distroless and ships no goose binary). Keep the version in sync with the `go`
+# directive in backend/go.mod and the build stage in backend/Dockerfile.
+go_image: golang:1.26-alpine
+
 env_settings:
   ENV: prod
   LOG_LEVEL: info
