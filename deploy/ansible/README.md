@@ -105,3 +105,5 @@ ansible-vault edit group_vars/prod/vault.yml && ansible-playbook deploy.yml
 # dry-run
 ansible-playbook deploy.yml --check --diff
 ```
+
+_**Reminder:** Service token expires on 20 Jun 2027_
