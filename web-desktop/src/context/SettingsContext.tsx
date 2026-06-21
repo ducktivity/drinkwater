@@ -11,7 +11,6 @@ import {
 import { createStore, reconcile } from 'solid-js/store'
 import { type ScheduleCheckpoint } from '../schedule'
 import {
-  createReminderEngine,
   ensureNotificationPermission,
   type ReminderSettings as ReminderSettingsValue,
 } from '../reminder'
@@ -178,9 +177,6 @@ export function SettingsProvider(props: ParentProps) {
     savePersistedState({ reminder: reminder() })
     schedulePush()
   }
-
-  // Wire up the gentle drink-water reminder.
-  createReminderEngine({ settings: reminder })
 
   // Load the account's saved settings once per sign-in (server wins). When the
   // account has no settings yet (a definitive 404 → null), seed it from the

@@ -82,11 +82,75 @@ async function forceWindowToFront(): Promise<void> {
 }
 
 /**
+ * Flashes the app's taskbar button to demand attention without yanking focus
+ * away from whatever the user is doing. On Windows this is the amber
+ * button-flash that keeps pulsing until the window is focused; Tauri maps the
+ * "Critical" attention type to it. Best-effort — silently ignored if denied.
+ */
+async function flashTaskbar(): Promise<void> {
+  const { getCurrentWindow, UserAttentionType } =
+    await import('@tauri-apps/api/window')
+  await getCurrentWindow().requestUserAttention(UserAttentionType.Critical)
+}
+
+/**
+ * Plays a short two-tone chime via the Web Audio API so the reminder is audible
+ * even when the OS toast is silent or suppressed. The tones are synthesised on
+ * the fly, so there is no audio asset to bundle, and it works identically on the
+ * web and inside the desktop WebView. Best-effort: any failure (autoplay policy,
+ * no output device, unsupported browser) is swallowed.
+ */
+function playReminderChime(): void {
+  try {
+    const AudioCtx =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    // Timers fire without a user gesture, so the context may start suspended.
+    void ctx.resume()
+
+    // Two rising notes (A5 → E6): a friendly, attention-grabbing "ding-ding".
+    const notes = [
+      { freq: 880, at: 0 },
+      { freq: 1319, at: 0.18 },
+    ]
+    for (const note of notes) {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = note.freq
+      // Quick attack then gentle exponential decay so each note rings like a bell.
+      const startAt = ctx.currentTime + note.at
+      gain.gain.setValueAtTime(0.0001, startAt)
+      gain.gain.exponentialRampToValueAtTime(0.3, startAt + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.4)
+      osc.connect(gain).connect(ctx.destination)
+      osc.start(startAt)
+      osc.stop(startAt + 0.45)
+    }
+    // Release the audio context once the chime has finished sounding.
+    setTimeout(() => {
+      ctx.close().catch(() => {
+        /* Already closed; nothing to release. */
+      })
+    }, 1000)
+  } catch {
+    /* Audio is a nicety, not a requirement — never let it break the reminder. */
+  }
+}
+
+/**
  * Fires a single drink-water reminder. On desktop this sends a native OS
  * notification and forces the window to pop to the foreground; on the web it
  * falls back to a passive browser notification (no window control available).
  */
 async function fireReminder(): Promise<void> {
+  // Sound the chime first — it works on web and desktop alike and doesn't
+  // depend on any of the native window/notification calls below succeeding.
+  playReminderChime()
+
   if (isTauri()) {
     try {
       const { isPermissionGranted, sendNotification } =
@@ -94,6 +158,9 @@ async function fireReminder(): Promise<void> {
       if (await isPermissionGranted()) {
         sendNotification({ title: REMINDER_TITLE, body: REMINDER_BODY })
       }
+      // Flash the taskbar and pull the window forward so the in-app reminder
+      // modal can't be missed, however buried the window was.
+      await flashTaskbar()
       await forceWindowToFront()
     } catch (error) {
       logger.error('Failed to fire desktop reminder', error)
@@ -117,6 +184,12 @@ async function fireReminder(): Promise<void> {
 interface ReminderEngineOptions {
   /** Reactive accessor for the current reminder settings. */
   settings: () => ReminderSettings
+  /**
+   * Called within the reactive owner each time a reminder fires, so the caller
+   * can surface an in-app modal alongside the native nudges (sound, taskbar
+   * flash, window pop). Optional so the engine still works headlessly.
+   */
+  onReminder?: () => void
 }
 
 /**
@@ -131,6 +204,7 @@ export function createReminderEngine(options: ReminderEngineOptions) {
 
     const intervalId = setInterval(() => {
       void fireReminder()
+      options.onReminder?.()
     }, intervalMin * 60_000)
     onCleanup(() => clearInterval(intervalId))
   })

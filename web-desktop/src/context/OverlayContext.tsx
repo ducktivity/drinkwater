@@ -9,6 +9,7 @@ import { db, type LocalWaterLog } from '../db/db'
 import { syncEngine } from '../db/sync'
 import { logger } from '../logger'
 import { savePersistedState } from '../state/persistence'
+import { createReminderEngine } from '../reminder'
 import { useSettings } from './SettingsContext'
 import { useHydration } from './HydrationContext'
 
@@ -38,6 +39,10 @@ interface OverlayContextValue {
   /** Whether the "add a past log" dialog is open. */
   isAddingLog: Accessor<boolean>
   setIsAddingLog: (open: boolean) => void
+  /** Whether the drink-water reminder modal is currently showing. */
+  isReminderVisible: Accessor<boolean>
+  /** Closes the reminder modal (both yes/no answers just dismiss it). */
+  dismissReminder: () => void
   /** Called when the user drags the bottle to empty — triggers the confirm dialog. */
   handleBottleEmptied: () => void
   /** Called when the user taps "Log drank" — confirms the amount drunk so far. */
@@ -74,6 +79,18 @@ export function OverlayProvider(props: ParentProps) {
     createSignal<LocalWaterLog | null>(null)
   // Whether the "add a past log" dialog is open.
   const [isAddingLog, setIsAddingLog] = createSignal(false)
+  // Whether the drink-water reminder modal is showing. Raised by the reminder
+  // engine when the interval elapses, and cleared when the user answers.
+  const [isReminderVisible, setIsReminderVisible] = createSignal(false)
+
+  // Wire up the gentle drink-water reminder. Each time the interval elapses the
+  // engine fires its native nudges (sound, taskbar flash, window pop) and we
+  // raise the in-app modal. Dismissing the modal does nothing more than close
+  // it — the next reminder simply arrives when the interval next elapses.
+  createReminderEngine({
+    settings: settings.reminder,
+    onReminder: () => setIsReminderVisible(true),
+  })
 
   /** Called when the user drags the bottle to empty — triggers the confirm dialog. */
   function handleBottleEmptied() {
@@ -142,6 +159,8 @@ export function OverlayProvider(props: ParentProps) {
     setLogBeingEdited,
     isAddingLog,
     setIsAddingLog,
+    isReminderVisible,
+    dismissReminder: () => setIsReminderVisible(false),
     handleBottleEmptied,
     handleLogDrank,
     handleLogConfirm,

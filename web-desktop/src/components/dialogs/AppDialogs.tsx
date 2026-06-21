@@ -4,6 +4,7 @@ import { ConfirmLogDialog } from './ConfirmLogDialog'
 import { DeleteLogDialog } from './DeleteLogDialog'
 import { EditLogDialog } from './EditLogDialog'
 import { AddLogDialog } from './AddLogDialog'
+import { ReminderModal } from './ReminderModal'
 
 /**
  * Renders the four modal dialogs, gated by the overlay context's visibility
@@ -29,6 +30,10 @@ export function AppDialogs() {
 
       <Show when={overlay.isAddingLog()}>
         <AddLogDialog />
+      </Show>
+
+      <Show when={overlay.isReminderVisible()}>
+        <ReminderModal />
       </Show>
     </>
   )
