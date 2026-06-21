@@ -163,14 +163,14 @@ graph TD
 
     CF <-.->|Outbound tunnel, origin dials out| CFd
     Go -->|Pooled connection, same region| Neon
-    Admin((You)) -->|Cloudflare Access - SSH over edge| CFd
+    Admin((You / Ansible)) -->|Cloudflare Access - SSH over edge| CFd
     Static[Cloudflare Pages] <-->|Serves Web SPA bundle for free| CF
 
 ```
 
 ### Infrastructure Components
 
-1. **The Runtime:** A minimal **Docker Compose** stack (version-controlled in the repo) runs **`cloudflared`** (the Cloudflare Tunnel daemon) alongside the Go binary, which runs as **two interchangeable colors** (`app-blue` / `app-green`) on distinct `localhost` ports to enable zero-downtime blue-green cutover. `cloudflared` makes an **outbound** connection to the Cloudflare edge and forwards public traffic down that tunnel to whichever color is currently live on `localhost`. TLS terminates at the edge, so there is no public reverse proxy, no Let's Encrypt certificate management, and no listening port. An on-box **deploy agent** (see §7) reconciles the running color toward the latest promoted image; CI does not connect to the server.
+1. **The Runtime:** A minimal **Docker Compose** stack (version-controlled in the repo) runs **`cloudflared`** (the Cloudflare Tunnel daemon) alongside the single Go `app` container and the `vector` log shipper. `cloudflared` makes an **outbound** connection to the Cloudflare edge and forwards public traffic down that tunnel to the app on `localhost`. TLS terminates at the edge, so there is no public reverse proxy, no Let's Encrypt certificate management, and no listening port. Deploys are **pushed from the operator's laptop with Ansible** over the same Cloudflare Access SSH path (see §7); nothing extra runs on the box between deploys, and CI does not connect to the server.
 2. **The Hardware:** A **Hetzner shared-compute (CX/CPX) server**, starting around 5USD/month. Go is memory efficient and the backend is stateless, so a small shared instance handles the low-frequency, batched sync traffic, and can be destroyed and redeployed at will since it holds no durable data.
 3. **Database Persistence:** **NeonDB**, a managed serverless PostgreSQL, is the durable archive of all history (the local client store is pruned to today-only). It is chosen for affordability and safety: it **scales to zero** so we pay for database compute only while a sync is actually running, and it provides managed backups, point-in-time recovery, and failover that we would otherwise have to operate ourselves. The trade-off — network latency and cold-start wake from autosuspend — is acceptable because sync is infrequent and batched (one `POST /sync` per refresh); it is mitigated by placing the Neon project in the **same region** as the Hetzner server and using Neon's **pooled connection** endpoint to respect serverless connection limits.
 4. **Web Delivery:** The SolidJS web frontend (the SPA bundle) is deployed to **Cloudflare Pages**. This is completely free, globally distributed, and serves the static files at edge speeds, meaning the Hetzner server spends zero CPU cycles serving HTML/JS and dedicates 100% of its resources to processing sync requests.
@@ -189,7 +189,9 @@ The deployment is designed so that **nothing connects to the origin server direc
 
 ## 7. Continuous Delivery & Release Management
 
-The deployment is **pull-based**. Because the Hetzner box has **no open inbound ports** (§6), CI cannot connect to it to deploy. CI builds, verifies, and publishes an immutable image; the server watches a registry channel tag and reconciles toward it. The CI runner holds no SSH keys or server credentials.
+Delivery is **push-based from the operator's laptop**, driven by **Ansible**. CI builds, verifies, and publishes an immutable image; a single `ansible-playbook` run then reconciles the box to that image. The box still has **no open inbound ports** (§6) and runs **no deploy agent** — Ansible reaches it over the **same Cloudflare Access SSH path** used for admin access (a Cloudflare Access **service token** lets it pass non-interactively), so the push rides the existing outbound tunnel rather than any reopened port. CI itself never connects to the server and holds no SSH keys or server credentials.
+
+> **Design note (lean-infra):** an earlier design called for a pull-based on-box `systemd` deploy agent driving blue-green `app-blue`/`app-green` cutover behind a `:production` promotion gate. For a single low-traffic app that machinery costs more to operate than the ~1s brownout it removes, so it is **deferred** — the agentless Ansible flow below is what actually runs; the blue-green design remains the north star if traffic or app-count grows.
 
 Three artifacts ship from one monorepo on independent timelines and must stay mutually compatible: the **DB schema** (NeonDB), the **backend image** (Hetzner), and the **frontend bundle** (Cloudflare Pages).
 
@@ -199,73 +201,68 @@ Three artifacts ship from one monorepo on independent timelines and must stay mu
 graph TD
     Dev[Push / Merge to main] --> GHA
 
-    subgraph GitHub Actions - never touches the server
-        GHA[CI: lint - test - build] --> Img[Build backend image]
-        Img -->|push :sha-GITSHA immutable| GHCR[(GHCR registry)]
+    subgraph CI["GitHub Actions - never touches the server"]
+        GHA["CI: lint - test - build"] --> Img[Build backend image]
+        Img -->|"push :sha-GITSHA immutable + move :latest"| GHCR[(GHCR registry)]
         GHA --> FE[Build frontend bundle]
+        FE -->|wrangler deploy| Pages[Cloudflare Pages]
     end
 
-    GHCR --> Gate{Manual promotion gate<br/>GitHub Environment approval}
-    Gate -->|retag :production -> :sha-GITSHA| GHCR
-    Gate -->|wrangler deploy AFTER backend live| Pages[Cloudflare Pages]
+    Laptop["Operator laptop<br/>ansible-playbook deploy.yml"] -->|"Cloudflare Access SSH<br/>service token, no open port"| Box
+    GHCR -->|docker compose pull| Box
 
-    subgraph Hetzner box - outbound only
-        Agent[Deploy agent - systemd timer] -->|poll digest of :production| GHCR
-        Agent -->|on change| Reconcile[Reconcile: migrate -> start green -> cutover]
+    subgraph HZ["Hetzner box - outbound only, no agent"]
+        Box["Ansible reconcile:<br/>git sync, render .env, pull, compose up, /readyz gate"]
     end
 ```
 
-### Image Tagging & Promotion
+### Image Tagging & Rollback
 
-CI publishes every successful build to **GitHub Container Registry (GHCR)** under an **immutable** content tag, `:sha-<gitsha>`. A **moving channel tag**, `:production`, is repointed to a vetted `:sha-<gitsha>` to promote a build. This tag mechanism provides:
+CI publishes every successful build to **GitHub Container Registry (GHCR)** under an **immutable** content tag, `:sha-<gitsha>`, and moves a **`:latest`** tag onto the newest build. The box pulls `:latest` by default; the immutable `:sha-<gitsha>` tags exist for provenance and rollback.
 
-- **A human gate.** Repointing `:production` runs behind a **GitHub Environment with a required reviewer**. Merging to `main` produces a candidate image; it does not ship to production until a maintainer approves the promotion.
-- **Rollback.** Rolling back is repointing `:production` to the previous `:sha-<gitsha>`. This is an **image/ingress revert only — never a down migration.** Because the release's expand migration is additive (§ Release Harmony), the previous backend runs correctly against the current schema, so the schema stays forward and any data the new version wrote is preserved. Down migrations are not used in production rollback.
-- **Provenance.** Every running container traces to an exact commit.
+- **Deploy.** `ansible-playbook deploy.yml` pulls whatever the configured `image_tag` (default `latest`) points at and recreates only changed containers.
+- **Rollback.** Set `image_tag: sha-<gitsha>` to a known-good build in `deploy/ansible/group_vars/prod/vars.yml` and re-run the playbook. This is an **image revert only — never a down migration.** Because each release's expand migration is additive (§ Release Harmony), the previous backend runs correctly against the current schema, so the schema stays forward and any data the new version wrote is preserved. Down migrations are not used in production rollback.
+- **Provenance.** Every running container traces to an exact commit via its `:sha-<gitsha>`.
 
-The source repository is public, so the image is published public and the box needs no registry credentials to pull. If the image is later made private, the agent authenticates to GHCR with a read-only token, which is the only delivery secret the box requires.
+The source repository is public, so the image is published public and the box needs no registry credentials to pull. If the image is later made private, the box authenticates to GHCR with a read-only token, the only delivery secret it would require.
 
-### The On-Box Deploy Agent & Blue-Green Cutover
+### The Ansible Deploy Flow
 
-A **deploy agent** — a `systemd` timer driving a shell script — runs the reconciliation loop on the server. It polls the **digest** behind `:production`; when the digest changes, it runs a blue-green rollout:
+A single playbook, [`deploy/ansible/deploy.yml`](../deploy/ansible/deploy.yml), is the entire reconcile loop, run from the laptop. It is **idempotent** — re-running it when nothing changed is a no-op, and a partial run is safe to repeat. Secrets live **encrypted in the repo** via **Ansible Vault**; the box's `.env` is **rendered** from non-secret vars (`group_vars/prod/vars.yml`) plus the vault on every run, so configuration is reproducible and never hand-edited on the box.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Reg as GHCR (:production)
-    participant Agent as Deploy Agent (on box)
-    participant Mig as Migration Job (one-shot)
+    participant Laptop as Operator laptop - Ansible
+    participant CF as Cloudflare Access SSH
+    participant Srv as Hetzner box
+    participant Reg as GHCR
     participant Neon as NeonDB
-    participant Green as New color (e.g. green)
-    participant CFd as cloudflared ingress
 
-    Agent->>Reg: Poll digest of :production
-    Note over Agent: Digest changed -> begin rollout
-    Agent->>Mig: Run goose `up` (expand-only migrations)
-    Mig->>Neon: Apply additive schema changes
-    Mig-->>Agent: Exit 0 (abort rollout on failure)
-    Agent->>Green: Start new color on idle localhost port
-    Agent->>Green: Probe /readyz (verifies Neon connectivity)
-    Note over Agent,Green: Only proceed once green is healthy
-    Agent->>CFd: Repoint ingress to green + SIGHUP reload
-    Note over CFd: Instant cutover, no dropped requests
-    Agent->>Agent: Keep old color warm N minutes, then reap
+    Laptop->>CF: ansible-playbook over SSH - service token, no PIN
+    CF->>Srv: outbound tunnel, no open inbound port
+    Laptop->>Srv: git sync repo checkout - compose + vector config
+    Laptop->>Srv: render .env from vars + Vault, mode 0600
+    Srv->>Reg: docker compose pull at image_tag
+    Laptop->>Srv: docker compose up -d --remove-orphans
+    Srv->>Neon: new app container dials pooled connection
+    Laptop->>Srv: poll /readyz until 200, else fail
 ```
 
-The agent is **digest-driven and direction-agnostic**: it compares the digest behind `:production` against the live color and converges toward whatever the tag points at, without distinguishing a roll-forward from a rollback. The same loop therefore serves both. On a rollback to an already-warm previous color the agent (or an operator) only flips ingress; if that color was already reaped, it re-pulls the previous `:sha` and runs the full loop.
+Properties of this flow:
 
-Properties of this loop:
+- **No agent, nothing polling.** Between deploys the box runs only `app` + `cloudflared` + `vector`; there is no long-running thing to own or patch.
+- **Health-gated.** The playbook probes `/readyz` (which confirms NeonDB reachability) on the loopback-published port and fails the run if the new container can't become ready. The app image is minimal and ships no HTTP client, so the probe runs from the box's remote Python rather than inside the container.
+- **Reproducible config.** `.env` is generated from the vault, so losing the box means re-running the first-deploy setup then one `ansible-playbook` run to repaint all config + secrets.
+- **Brief brownout accepted.** A single app color means `docker compose up -d` recreates the container with a ~1s gap — acceptable at current traffic. Blue-green (deferred above) is what removes it.
 
-- **Migrations run server-side, before cutover.** The agent runs `goose up` as a **one-shot container** that exits before any new traffic is served. `goose up` is idempotent: on a roll-forward it applies the new expand migration; on a rollback the schema is already ahead, so there are no pending migrations and it is a no-op. Production DB credentials live on the box, not in CI. If the migration fails, the rollout aborts and the current color keeps serving.
-- **Health-gated cutover.** The new color must pass `/readyz` (which confirms it can reach NeonDB) before the agent changes ingress.
-- **Cutover is a `cloudflared` ingress reload.** The agent rewrites the tunnel ingress rule to point the hostname at the new color's port and sends `SIGHUP`; `cloudflared` hot-reloads without dropping connections.
-- **Rollback window.** The previous color keeps running for a few minutes, so an immediately detected regression is an ingress flip back without an image pull.
+Migrations are **expand-only** and applied **before** the backend that depends on them (§ Release Harmony). The playbook runs them as a one-shot `goose` container ahead of `compose up`, so the additive schema lands before the new image — no separate laptop step.
 
 ### Release Harmony: Expand/Contract & Ordering
 
 Versions coexist in time, which constrains what a single release may change:
 
-1. During a blue-green cutover, the **old and new backend run against the same NeonDB**.
+1. A **rollback** runs the **previous backend against the current (already-migrated) NeonDB**, and during a `compose up` recreate the outgoing and incoming containers briefly overlap on the same NeonDB.
 2. The frontend is **local-first**: the Cloudflare Pages SPA is cached and runs offline for days, so a client can be on a stale frontend while the backend has moved on.
 
 Neither case tolerates a breaking change within one release. Schema and API changes follow the **expand/contract (parallel-change)** pattern:
@@ -284,14 +281,14 @@ graph LR
     E1 --> E2 --> E3 -.one or more releases later.-> C1 --> C2
 ```
 
-- **Expand phase (this release):** schema changes are **additive** — new columns are nullable or defaulted, new tables/endpoints are introduced alongside the old. The migration ships **before** the backend that depends on it (the agent runs `goose up` before starting the new color).
+- **Expand phase (this release):** schema changes are **additive** — new columns are nullable or defaulted, new tables/endpoints are introduced alongside the old. The migration ships **before** the backend that depends on it (a one-shot `goose` container in the playbook, before `compose up`).
 - **Contract phase (a later release):** destructive changes (dropping a column, removing an endpoint) happen only after every backend and every reachable client has moved past the old shape. Expand and contract for the same field are never shipped in one release.
 
 The per-release **deployment order** is therefore:
 
-1. **DB migration** (additive) — agent applies it server-side before cutover.
-2. **Backend** — new color goes live behind the health gate.
-3. **Frontend (Cloudflare Pages)** — deployed last, via `wrangler` in the same workflow, after the backend is serving. The API removed nothing, so the previously cached frontend keeps working; the new bundle becomes available on the next client load.
+1. **DB migration** (additive) — applied before the backend that depends on it (a one-shot `goose` container in the playbook, before `compose up`).
+2. **Backend** — `ansible-playbook` pulls the new image and recreates the app behind the `/readyz` gate.
+3. **Frontend (Cloudflare Pages)** — deployed via `wrangler` in CI. The API removed nothing, so the previously cached frontend keeps working; the new bundle becomes available on the next client load. (Ordering frontend strictly after a verified backend is a deferred hardening; the expand-only rule keeps the two compatible in the meantime.)
 
 The additive-only rule and this ordering keep schema, backend, and frontend compatible across their three independent timelines.
 
@@ -303,7 +300,7 @@ The GitHub Actions workflow runs the same gates a developer runs locally before 
 - **Frontend:** `pnpm run check` (typecheck + Tailwind lint) and `pnpm run build`, plus a check that `generate-types` is in sync with the committed OpenAPI spec.
 - **Migrations:** new goose migrations apply cleanly, and down-migrations exist, against an ephemeral Postgres in CI.
 
-The image is pushed and made eligible for promotion only after all gates pass.
+The image is pushed (tagged `:sha-<gitsha>` and `:latest`) only after all gates pass, making it eligible for the next `ansible-playbook` deploy.
 
 ---
 
@@ -322,7 +319,7 @@ A single logger (`go-chi/httplog`, slog-native) backs both the per-request summa
 Every line carries message-plus-KV structure:
 
 - **Base** (tagged onto all lines): `service`, `env`, `version`, `commit`, `pid`.
-- **Per-request** (request-scoped): `requestID`, `method`, `path`, `remoteIP`, `user_id`, `status`, `bytes`, `duration`.
+- **Per-request** (request-scoped): `requestID`, `method`, `path`, `user_id`, `status`, `bytes`, `duration`.
 - **On error**: `error`, plus — for server faults (5xx) — `sentry_id` linking the log line to the Sentry issue that holds the stack trace. Client faults (4xx) are tagged `client_error` and are **not** sent to Sentry.
 
 Build info (`version`/`commit`) is injected at release time via `-ldflags`, falling back to the Go toolchain's embedded VCS stamp for local builds.
@@ -348,9 +345,9 @@ graph LR
 ### Health & Readiness
 
 - `/healthz` — **liveness**: returns 200 whenever the process runs; checks no dependencies.
-- `/readyz` — **readiness**: pings NeonDB with a short timeout, returns 503 if unreachable. This is the probe the §7 deploy agent gates blue-green cutover on.
+- `/readyz` — **readiness**: pings NeonDB with a short timeout, returns 503 if unreachable. This is the probe the §7 Ansible deploy gates each release on (it fails the playbook run if the new container can't reach Neon).
 
-Both are excluded from request logging (httplog "quiet down") so constant probing from the deploy agent and uptime monitor doesn't drown the logs. A **BetterStack uptime monitor** probes `/healthz` through the Cloudflare hostname.
+Both are excluded from request logging (httplog "quiet down") so the deploy readiness check and uptime monitor probing doesn't drown the logs. A **BetterStack uptime monitor** probes `/healthz` through the Cloudflare hostname.
 
 ### Retention
 
@@ -365,7 +362,7 @@ Both notify email/Slack.
 
 ### Graceful Shutdown
 
-The server listens with an `http.Server` cancelled by `SIGINT`/`SIGTERM`, draining in-flight requests via `srv.Shutdown` and flushing Sentry before exit — so a blue-green cutover never drops a request or loses a buffered event.
+The server listens with an `http.Server` cancelled by `SIGINT`/`SIGTERM`, draining in-flight requests via `srv.Shutdown` and flushing Sentry before exit — so a deploy's container recreate never drops a request or loses a buffered event.
 
 ### Security & Cost
 
