@@ -1,0 +1,14 @@
+app_dir: /opt/ducktivity/drinkwater
+repo_url: https://github.com/ducktivity/drinkwater.git
+repo_branch: main
+
+# Moving "latest" by default; set to a sha-<gitsha> to pin/rollback a build.
+image_tag: latest
+
+env_settings:
+  ENV: prod
+  LOG_LEVEL: info
+  LOG_FORMAT: json
+  CORS_ALLOWED_ORIGINS: "https://drinkwater.ducktvt.com"
+  # From header for login emails. The domain must be verified in Resend.
+  AUTH_EMAIL_FROM: "Drinkwater <noreply@ducktvt.com>"

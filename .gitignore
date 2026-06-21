@@ -19,8 +19,11 @@ mobile/build/
 mobile/.flutter-plugins
 mobile/.flutter-plugins-dependencies
 
-# Shared
+# Secrets
 .env
+deploy/ansible/.vault_pass
+
+# Agents
 AGENTS.md
 CLAUDE.md
 .agent/

@@ -29,6 +29,12 @@ services:
       # Comma-separated extra CORS origins (e.g. the Cloudflare Pages frontend
       # hostname). Appended to the localhost/Tauri dev defaults in main.go.
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      # Email-OTP auth. AUTH_JWT_SECRET is REQUIRED outside dev (signs session
+      # JWTs + peppers login codes). RESEND_API_KEY empty => login codes are
+      # logged instead of emailed. AUTH_EMAIL_FROM empty => main.go's default.
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM:-}
     # Publish only to the box's loopback: handy for on-box `curl`/debugging, never
     # reachable from outside (defense-in-depth on top of the closed firewall).
     # cloudflared reaches the app over the private Compose network (http://app:8080),

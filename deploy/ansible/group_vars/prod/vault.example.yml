@@ -1,0 +1,17 @@
+# Template for the ENCRYPTED secrets file. This .example is committed in clear
+# text as documentation of the required keys; it contains NO real secrets.
+#
+# Create the real, encrypted file alongside it:
+#   echo 'your-vault-password' > ~/.vault_pass && chmod 600 ~/.vault_pass
+#   cd deploy/ansible && ansible-vault create group_vars/prod/vault.yml
+#
+# Paste the keys below, save, and commit vault.yml — once encrypted it is safe to commit.
+# Verify with: head -1 group_vars/prod/vault.yml  ->  $ANSIBLE_VAULT;1.1;AES256
+
+vault_database_url: "postgresql://...-pooler.../neondb?sslmode=require"
+vault_sentry_dsn: "https://...@oXXXX.ingest.sentry.io/XXXX"
+vault_cloudflare_tunnel_token: "eyJ..."
+vault_betterstack_source_token: "..."
+vault_betterstack_ingest_host: "https://sXXXX.<region>.betterstackdata.com"
+vault_auth_jwt_secret: "<long random string; signs session JWTs + peppers login codes>"
+vault_resend_api_key: "re_..."

@@ -1,0 +1,49 @@
+---
+- name: Deploy drinkwater backend
+  hosts: prod
+  gather_facts: false
+
+  tasks:
+    - name: Sync the repo checkout (compose file, vector config)
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_dir }}"
+        version: "{{ repo_branch }}"
+        # We only need git-tracked config on the box; don't clobber untracked .env.
+        force: true
+
+    - name: Render the production .env from vars + vault
+      ansible.builtin.template:
+        src: templates/env.j2
+        dest: "{{ app_dir }}/.env"
+        mode: "0600"
+      register: env_file
+
+    - name: Pull the published images
+      ansible.builtin.command:
+        cmd: docker compose pull
+        chdir: "{{ app_dir }}"
+      register: pull
+      changed_when: "'Downloaded newer image' in pull.stderr or 'Pull complete' in pull.stdout"
+
+    - name: Bring the stack up (recreates only changed containers)
+      ansible.builtin.command:
+        cmd: docker compose up -d --remove-orphans
+        chdir: "{{ app_dir }}"
+      register: up
+      changed_when: "'Recreate' in up.stderr or 'Started' in up.stderr or 'Created' in up.stderr"
+
+    - name: Prune dangling images (reclaim disk)
+      ansible.builtin.command:
+        cmd: docker image prune -f
+      changed_when: false
+
+    - name: Wait for the app to report ready (DB reachable)
+      ansible.builtin.command:
+        cmd: docker compose exec -T app wget -qO- http://localhost:8080/readyz
+        chdir: "{{ app_dir }}"
+      register: ready
+      retries: 5
+      delay: 3
+      until: ready.rc == 0
+      changed_when: false
