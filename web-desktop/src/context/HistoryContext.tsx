@@ -12,6 +12,7 @@ import { fetchLogsForDate, readLocalLogsForDate } from '../db/history'
 import { RequestError } from '../db/api'
 import { getTodayKey, compareLoggedAtDesc } from '../utils'
 import { useHydration } from './HydrationContext'
+import { useAuth } from './AuthContext'
 import { useToast } from './ToastContext'
 import { logger } from '../logger'
 
@@ -37,6 +38,7 @@ const HistoryContext = createContext<HistoryContextValue>()
 /** Provides the history view state for navigating and editing past days. */
 export function HistoryProvider(props: ParentProps) {
   const hydration = useHydration()
+  const auth = useAuth()
   const toast = useToast()
 
   // The day currently being viewed, as a YYYY-MM-DD key. Defaults to today.
@@ -93,7 +95,14 @@ export function HistoryProvider(props: ParentProps) {
       setHistoryLogs(localLogs)
 
       // Phase 2 — reconcile against the backend, the source of truth for days
-      // already pruned from IndexedDB and for changes from other devices.
+      // already pruned from IndexedDB and for changes from other devices. Only
+      // logged-in users have remote data; while logged out the app is local-only,
+      // so skip the fetch entirely (it would 401 and surface a spurious error).
+      if (!auth.isLoggedIn()) {
+        setIsLoadingHistory(false)
+        return
+      }
+
       try {
         const reconciled = await fetchLogsForDate(date)
         if (isStale()) return
