@@ -39,11 +39,14 @@
       changed_when: false
 
     - name: Wait for the app to report ready (DB reachable)
-      ansible.builtin.command:
-        cmd: docker compose exec -T app wget -qO- http://localhost:8080/readyz
-        chdir: "{{ app_dir }}"
+      # Probe the loopback-published port from the box itself (uri runs via the
+      # remote Python). The app image is minimal and ships no wget/curl, so we
+      # can't exec a HTTP client inside the container.
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/readyz
+        status_code: 200
       register: ready
-      retries: 5
+      retries: 10
       delay: 3
-      until: ready.rc == 0
+      until: ready.status == 200
       changed_when: false
