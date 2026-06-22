@@ -1,0 +1,51 @@
+name: Desktop Check
+
+# Reusable workflow for Tauri desktop shell Rust validation: fmt, clippy.
+# Called by:
+#   - CI workflows (ci-desktop.yml) on every PR/main push
+#   - CD workflows (cd-desktop.yml) before releasing
+#
+# It validates ONLY the Rust side (web-desktop/src-tauri). The SolidJS bundle
+# is validated separately by _web-check.yml (which ci-desktop.yml and
+# cd-desktop.yml also require). This separation means a desktop-only break
+# (Rust that won't compile or is unformatted) is caught early without
+# rebuilding the web bundle.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Rust fmt + clippy
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: web-desktop/src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (with rustfmt + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: web-desktop/src-tauri
+
+      - name: cargo fmt (check only, never mutate)
+        run: cargo fmt --all --check
+
+      - name: Create placeholder frontend dist
+        working-directory: web-desktop
+        shell: bash
+        run: |
+          mkdir -p dist
+          echo '<!doctype html><meta charset="utf-8"><title>placeholder</title>' > dist/index.html
+
+      - name: cargo clippy (treat warnings as errors)
+        run: cargo clippy --all-targets -- -D warnings

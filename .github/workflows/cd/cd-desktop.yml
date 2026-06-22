@@ -20,17 +20,14 @@ permissions:
   contents: write
 
 jobs:
-  # Verify the backend at this tag's commit BEFORE publishing the installer, so a
-  # released desktop client never ships ahead of a verified backend
-  # (docs/architecture.md §7: frontend after backend). Tags don't trigger Backend
-  # CI, so we invoke the same reusable gate here; `release` waits on it via needs.
-  backend-check:
-    name: Verify backend before release
-    uses: ./.github/workflows/backend-check.yml
+
+  desktop-check:
+    name: Verify Tauri before release
+    uses: ./.github/workflows/checks/_desktop-check.yml
 
   release:
     name: Build & publish Windows installer
-    needs: backend-check
+    needs: [backend-check, web-check, desktop-check]
     runs-on: windows-latest
 
     steps:

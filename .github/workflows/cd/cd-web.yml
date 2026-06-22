@@ -1,0 +1,62 @@
+name: Web Deploy
+
+# Builds the SolidJS web app and deploys to Cloudflare Pages via Wrangler.
+#
+# Dependency chain (docs/architecture.md §7: frontend deploys AFTER backend):
+#   - Triggered by workflow_run AFTER Backend CD succeeds on main. Deploys the
+#     exact commit that passed Backend CD, so the SPA always meets a verified API.
+#   - PRs are validated by ci-web.yml before merge (branch protection).
+
+on:
+  workflow_run:
+    workflows: ['Backend CD']
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Verify web before deploy
+    uses: ./.github/workflows/checks/_web-check.yml
+
+  deploy:
+    name: Build & deploy web to Cloudflare Pages
+    needs: check
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    defaults:
+      run:
+        working-directory: web-desktop
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Checkout the exact commit Backend CD verified.
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web-desktop/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: web-desktop
+          command: pages deploy dist --project-name=drinkwater-web --branch=main

@@ -197,15 +197,22 @@ Three artifacts ship from one monorepo on independent timelines and must stay mu
 
 ### Pipeline Overview
 
+CI publishes/deploys artifacts **only when `main` is actually updated** — a push/merge to `main` (backend image + web bundle) or a `v*` tag (desktop installer). **Pull requests run checks only** and ship nothing. The frontends are ordered **strictly after a verified backend**: the web deploy is gated on Backend CD succeeding for the same commit, and the tagged desktop release runs the same backend verification gate before publishing.
+
 ```mermaid
 graph TD
-    Dev[Push / Merge to main] --> GHA
+    Push[Push / merge to main] --> BCI
+    Tag[Push v* tag] --> DREL
 
     subgraph CI["GitHub Actions - never touches the server"]
-        GHA["CI: lint - test - build"] --> Img[Build backend image]
+        BCI["Backend CD<br/>verify gate"] -->|on push to main| Img[Build backend image]
         Img -->|"push :sha-GITSHA immutable + move :latest"| GHCR[(GHCR registry)]
-        GHA --> FE[Build frontend bundle]
-        FE -->|wrangler deploy| Pages[Cloudflare Pages]
+        BCI -->|"on success, workflow_run"| FE["Web Deploy<br/>build SPA"]
+        FE -->|"wrangler deploy (main only)"| Pages[Cloudflare Pages]
+        Push --> DCI["Desktop CI<br/>Rust fmt + clippy"]
+
+        DREL["Desktop Release<br/>verify-backend gate"] --> DBuild[Tauri build + sign]
+        DBuild -->|"installer + latest.json"| GHREL[(GitHub Release)]
     end
 
     Laptop["Operator laptop<br/>ansible-playbook deploy.yml"] -->|"Cloudflare Access SSH<br/>service token, no open port"| Box
@@ -215,6 +222,24 @@ graph TD
         Box["Ansible reconcile:<br/>git sync, render .env, pull, compose up, /readyz gate"]
     end
 ```
+
+### CI Workflows: Triggers & Gating
+
+Five workflow files implement the flow. A single **reusable backend verification gate** is the one definition of "the backend is sound at this commit", shared by both pipelines that need it so they can't drift:
+
+| Workflow | Trigger | What it does | Publishes / deploys? |
+| --- | --- | --- | --- |
+| `_backend-check.yml` (reusable) | called by the two below | gofmt, `go vet`, `go build`, `go test`, staticcheck, gosec | no — verification only |
+| `cd-backend.yml` — **Backend CD** | push + PR to `main` | runs the gate; on **push to `main`** also builds & pushes the image to GHCR | image → GHCR (push to `main` only) |
+| `cd-web.yml` — **Web Deploy** | PR to `main`; `workflow_run` after Backend CD on `main` | PR: typecheck + lint + build (validation). Main: rebuilds the verified commit and deploys, **only if Backend CD succeeded** | Cloudflare Pages (after a green Backend CD on `main`) |
+| `ci-desktop.yml` — **Desktop CI** | push + PR to `main` | `cargo fmt --check` + `cargo clippy -D warnings` on `src-tauri` only (the shared SolidJS is already validated by `cd-web.yml`) | no — verification only |
+| `cd-desktop.yml` — **Desktop Release** | `v*` tag push only | runs the reusable backend gate, then builds & signs the Tauri installer and publishes it + `latest.json` to a GitHub Release for the auto-updater | GitHub Release (tag only) |
+
+Consequences worth stating explicitly:
+
+- **PRs are check-only.** No image, no Pages deploy, no installer is ever produced from a pull request.
+- **Frontend after backend.** The web bundle can only deploy after Backend CD is green for that commit (cross-workflow `workflow_run`), and the desktop installer can only publish after the same gate passes — so a client artifact never ships ahead of a backend image that failed to build. The expand-only API rule (below) keeps them compatible in the window before the operator runs the Ansible deploy.
+- **CI never deploys the backend.** It only publishes the image; the actual production rollout is the operator's `ansible-playbook` run (below). "Verified backend" in CI means *the image built and the gate passed*, not *the new backend is live in prod*.
 
 ### Image Tagging & Rollback
 
@@ -288,19 +313,24 @@ The per-release **deployment order** is therefore:
 
 1. **DB migration** (additive) — applied before the backend that depends on it (a one-shot `goose` container in the playbook, before `compose up`).
 2. **Backend** — `ansible-playbook` pulls the new image and recreates the app behind the `/readyz` gate.
-3. **Frontend (Cloudflare Pages)** — deployed via `wrangler` in CI. The API removed nothing, so the previously cached frontend keeps working; the new bundle becomes available on the next client load. (Ordering frontend strictly after a verified backend is a deferred hardening; the expand-only rule keeps the two compatible in the meantime.)
+3. **Frontend (Cloudflare Pages)** — deployed via `wrangler` in CI, gated to run **after** Backend CD succeeds for the same commit (Web Deploy is triggered by Backend CD via `workflow_run`), so the bundle never ships ahead of a backend image that failed to build. The tagged desktop release applies the same rule via a shared reusable backend-verification gate before publishing the installer. The API removed nothing, so the previously cached frontend keeps working regardless; the new bundle becomes available on the next client load.
 
 The additive-only rule and this ordering keep schema, backend, and frontend compatible across their three independent timelines.
 
 ### What CI Actually Runs
 
-The GitHub Actions workflow runs the same gates a developer runs locally before a build becomes a candidate image:
+The gates currently wired, mirroring what a developer runs locally before a build becomes a candidate image:
 
-- **Backend:** `go vet` / `go build`, unit tests, a check that generated artifacts are current (`export-swagger.sh`, `db-codegen.sh` produce no diff), and that `go fmt` is clean.
-- **Frontend:** `pnpm run check` (typecheck + Tailwind lint) and `pnpm run build`, plus a check that `generate-types` is in sync with the committed OpenAPI spec.
-- **Migrations:** new goose migrations apply cleanly, and down-migrations exist, against an ephemeral Postgres in CI.
+- **Backend** (`_backend-check.yml`): `gofmt` clean, `go vet`, `go build`, `go test`, **staticcheck**, and **gosec** — the same set as `scripts/check.sh`.
+- **Web** (`cd-web.yml`): `pnpm run typecheck`, `pnpm run lint` (ESLint + Tailwind), and `pnpm run build`.
+- **Desktop** (`ci-desktop.yml`): `cargo fmt --check` and `cargo clippy -D warnings` on the `src-tauri` Rust crate (a placeholder `dist/` satisfies `generate_context!` so the lint runs without rebuilding the SPA).
 
-The image is pushed (tagged `:sha-<gitsha>` and `:latest`) only after all gates pass, making it eligible for the next `ansible-playbook` deploy.
+The backend image is pushed (tagged `:sha-<gitsha>` and `:latest`) only after the backend gate passes on a push to `main`, making it eligible for the next `ansible-playbook` deploy. The web bundle deploys only after that same Backend CD run succeeds.
+
+**Deferred CI gates (not yet wired).** The following are the north-star quality gates; the expand-only discipline (above) holds the line until they land, and they can be added to the relevant workflow independently:
+
+- Generated-artifact **drift checks** — `export-swagger.sh` / `db-codegen.sh` (backend) and `generate-types` (web) produce no diff against the committed output.
+- **Ephemeral-Postgres migration tests** — new goose migrations apply cleanly (and down-migrations exist) against a throwaway Postgres in CI.
 
 ---
 

@@ -1,4 +1,4 @@
-name: Backend CI
+name: Backend CD
 
 # Builds, checks, and (on main) publishes the backend image to GHCR.
 # This is the minimal "get it live" pipeline from docs/deployment.md Step 8 — it
@@ -9,8 +9,6 @@ name: Backend CI
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 # Least privilege by default; the image job widens to packages: write.
 permissions:
@@ -18,11 +16,11 @@ permissions:
 
 jobs:
   # Verification gate, extracted into a reusable workflow so the exact same gates
-  # also guard the tagged Desktop Release (see backend-check.yml). The image is
+  # also guard the tagged Desktop Release (see _backend-check.yml). The image is
   # published only after this passes.
   check:
-    name: Verify backend
-    uses: ./.github/workflows/backend-check.yml
+    name: Verify backend before image release
+    uses: ./.github/workflows/checks/_backend-check.yml
 
   image:
     name: Build & push image to GHCR

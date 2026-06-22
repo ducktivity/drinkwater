@@ -1,0 +1,17 @@
+name: Web CI
+
+# Validation gate for the SolidJS web app on every PR/main push.
+# Runs: typecheck, lint, build (validates the SPA compiles).
+# Does NOT deploy (that's cd-web.yml, which requires Backend CD to succeed first).
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: TypeScript & build
+    uses: ./.github/workflows/checks/_web-check.yml
