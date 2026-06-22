@@ -15,18 +15,46 @@ permissions:
   contents: read
 
 jobs:
+  # Detect whether anything affecting the backend image changed in this push.
+  # We deliberately do NOT use a top-level `on.push.paths` filter: that would
+  # stop Backend CD from running at all on a web-only push, and both Web Deploy
+  # and Desktop Release hang off this workflow's completion (workflow_run). So
+  # the workflow always starts; we just skip the expensive jobs below when the
+  # backend is untouched. On a push, paths-filter diffs against the prior commit.
+  changes:
+    name: Detect backend changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'shared-schemas/**'
+              - '.github/workflows/cd-backend.yml'
+              - '.github/workflows/_backend-check.yml'
+
   # Verification gate, extracted into a reusable workflow so the exact same gates
   # also guard the tagged Desktop Release (see _backend-check.yml). The image is
-  # published only after this passes.
+  # published only after this passes. Skipped (run stays green) when the backend
+  # did not change.
   check:
     name: Verify backend before image release
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     uses: ./.github/workflows/_backend-check.yml
 
   image:
     name: Build & push image to GHCR
-    needs: check
-    # Publish only for real pushes to main, never for pull requests.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [changes, check]
+    # Publish only when the backend actually changed and the gate passed. When
+    # the backend is unchanged, `latest` already points at the correct image, so
+    # there is nothing to release.
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

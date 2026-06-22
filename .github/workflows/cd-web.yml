@@ -17,15 +17,45 @@ permissions:
   contents: read
 
 jobs:
+  # Web Deploy is chained off Backend CD (workflow_run), so it fires for every
+  # green Backend CD run — including pushes that changed only the backend. Detect
+  # whether the web app actually changed in the commit Backend CD verified and
+  # skip the build + deploy when it did not (Cloudflare keeps serving the last
+  # deployment). A workflow_run event carries no before-SHA the way a push does,
+  # so we diff the verified commit against its first parent.
+  changes:
+    name: Detect web changes
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2 # need the parent commit to diff against
+      - name: Detect changes under web-desktop/ or shared-schemas/
+        id: filter
+        run: |
+          changed=$(git diff --name-only HEAD^ HEAD)
+          if echo "$changed" | grep -qE '^(web-desktop/|shared-schemas/)'; then
+            echo "web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web=false" >> "$GITHUB_OUTPUT"
+            echo "No web changes in this commit — skipping deploy."
+          fi
+
   check:
     name: Verify web before deploy
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     uses: ./.github/workflows/_web-check.yml
 
   deploy:
     name: Build & deploy web to Cloudflare Pages
-    needs: check
+    needs: [changes, check]
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
+    if: needs.changes.outputs.web == 'true'
     defaults:
       run:
         working-directory: web-desktop
