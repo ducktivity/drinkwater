@@ -6,24 +6,25 @@ name: Desktop Release
 # (tauri-plugin-updater) reads `latest.json` from the latest Release to push
 # smooth in-app updates to installed copies.
 #
-# Trigger: pushing a version tag like `v1.2.3`. Bump the version first with
-# `pnpm run release <version>` (see docs/release-desktop.md), commit, then push
-# the tag.
+# Two ways in:
+#   1. Automated (normal path): after Backend CD succeeds on main, the `decide`
+#      job reads the desktop version from web-desktop/package.json. If that
+#      version has no tag yet, it publishes the release and tauri-action creates
+#      the vX.Y.Z tag. If the version is already released, every job is skipped
+#      and the run finishes green (no failure). This mirrors cd-web.yml so the
+#      backend goes live first, then web and desktop publish off the verified
+#      commit. Bump the version with `pnpm run release <version>`, commit, merge.
+#   2. Manual (fallback): push a version tag like `v1.2.3` directly to force a
+#      desktop-only release, bypassing the backend gate.
 
 on:
+  workflow_run:
+    workflows: ['Backend CD']
+    types: [completed]
+    branches: [main]
   push:
     tags:
       - 'v*'
-  # Also callable from cd-tag.yml so a merged version bump can publish the
-  # desktop release without a manually pushed tag (and without a PAT/deploy key).
-  # When called, `tag` is the version tag to publish; tauri-action creates that
-  # tag at the current commit as part of creating the GitHub Release.
-  workflow_call:
-    inputs:
-      tag:
-        description: 'Release tag to create and publish, e.g. v1.2.3'
-        required: true
-        type: string
 
 # tauri-action needs write access to create the Release and upload assets.
 permissions:
@@ -31,21 +32,88 @@ permissions:
 
 jobs:
 
+  # The brain: works out whether to release, which tag, which commit to build,
+  # and the changelog range — for both the automated and manual paths. Every
+  # downstream job is gated on `release == 'true'`, so "already released" simply
+  # skips them (a skipped job does not fail the run).
+  decide:
+    name: Decide whether to release
+    runs-on: ubuntu-latest
+    # Manual tag push always proceeds; the automated path only after a green
+    # Backend CD.
+    if: github.event_name == 'push' || github.event.workflow_run.conclusion == 'success'
+    outputs:
+      release: ${{ steps.d.outputs.release }}
+      tag: ${{ steps.d.outputs.tag }}
+      ref: ${{ steps.d.outputs.ref }}
+      cliff_args: ${{ steps.d.outputs.cliff_args }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history + tags so the existence check is reliable. Pin to the
+          # backend-verified commit on the automated path.
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Decide tag, ref, and changelog range
+        id: d
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ]; then
+            # Manual tag push: release that exact tag. It already exists at HEAD,
+            # so the changelog uses the latest tagged section.
+            echo "release=true"        >> "$GITHUB_OUTPUT"
+            echo "tag=$REF_NAME"       >> "$GITHUB_OUTPUT"
+            echo "ref=$REF_NAME"       >> "$GITHUB_OUTPUT"
+            echo "cliff_args=--latest" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Automated path: release only if package.json's version has no tag yet.
+          version=$(node -p "require('./web-desktop/package.json').version")
+          tag="v$version"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag already released — nothing to do."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$version is new — will publish $tag."
+            # Tag doesn't exist yet, so render the unreleased commits under it.
+            echo "release=true"                       >> "$GITHUB_OUTPUT"
+            echo "tag=$tag"                           >> "$GITHUB_OUTPUT"
+            echo "ref=$HEAD_SHA"                      >> "$GITHUB_OUTPUT"
+            echo "cliff_args=--unreleased --tag $tag" >> "$GITHUB_OUTPUT"
+          fi
+
   desktop-check:
-    name: Verify Tauri before release
+    name: Verify Tauri (Rust) before release
+    needs: decide
+    if: needs.decide.outputs.release == 'true'
     uses: ./.github/workflows/_desktop-check.yml
+
+  # The desktop app bundles the SolidJS frontend, so it must pass the same web
+  # checks (typecheck/lint/build) as the web deploy before we ship an installer.
+  web-check:
+    name: Verify web bundle before release
+    needs: decide
+    if: needs.decide.outputs.release == 'true'
+    uses: ./.github/workflows/_web-check.yml
 
   release:
     name: Build & publish Windows installer
-    needs: [desktop-check]
+    needs: [decide, desktop-check, web-check]
+    if: needs.decide.outputs.release == 'true'
     runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history + tags so git-cliff can build the changelog range
-          # (commits since the previous release).
+          # Full history + tags so git-cliff can build the changelog range.
           fetch-depth: 0
+          # The commit decided above: backend-verified SHA (automated) or the
+          # pushed tag (manual).
+          ref: ${{ needs.decide.outputs.ref }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -71,16 +139,15 @@ jobs:
         working-directory: web-desktop
         run: pnpm install --frozen-lockfile
 
-      # Render the release notes from Conventional Commits since the last
-      # release. When invoked from cd-tag.yml the tag doesn't exist yet, so we
-      # render the unreleased commits labelled with `inputs.tag`; on a manual
-      # tag-push the tag is already at HEAD, so we render the latest section.
+      # Render the release notes from Conventional Commits. `decide` picked the
+      # range: --unreleased (automated, tag not created yet) or --latest (manual,
+      # tag already at HEAD).
       - name: Generate release notes
         id: changelog
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          args: ${{ inputs.tag && format('--unreleased --tag {0}', inputs.tag) || '--latest' }}
+          args: ${{ needs.decide.outputs.cliff_args }}
 
       - name: Build, sign, and publish release
         uses: tauri-apps/tauri-action@v0
@@ -98,10 +165,10 @@ jobs:
         with:
           # Run Tauri from the frontend project root.
           projectPath: web-desktop
-          # Name the Release after the tag: the pushed tag on a tag-push, or the
-          # `tag` input when invoked from cd-tag.yml. __VERSION__ is substituted
-          # by tauri-action from tauri.conf.json.
-          tagName: ${{ inputs.tag || github.ref_name }}
+          # Name the Release after the decided tag. On the automated path
+          # tauri-action creates this tag as part of publishing. __VERSION__ is
+          # substituted by tauri-action from tauri.conf.json.
+          tagName: ${{ needs.decide.outputs.tag }}
           releaseName: 'Drinkwater __VERSION__'
           # Changelog generated above (cliff.toml appends the download/install
           # footer). Falls back to a static line if git-cliff produced nothing.
