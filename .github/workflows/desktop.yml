@@ -8,13 +8,12 @@ name: Desktop Release
 #
 # Trigger: pushing a version tag like `v1.2.3`. Bump the version first with
 # `pnpm run release <version>` (see docs/release-desktop.md), commit, then push
-# the tag. `workflow_dispatch` is also allowed for manual re-runs.
+# the tag.
 
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 # tauri-action needs write access to create the Release and upload assets.
 permissions:

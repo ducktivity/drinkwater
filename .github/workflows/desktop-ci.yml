@@ -1,0 +1,66 @@
+name: Desktop CI
+
+# PR/main validation for the desktop shell's Rust side only.
+#
+# The desktop app is the same SolidJS code as the web app wrapped in a Tauri
+# shell, so the Frontend workflow (web.yml) already validates everything the two
+# share (typecheck, lint, build). The one thing it can't see is the native Rust
+# crate in web-desktop/src-tauri — this workflow covers exactly that, so a
+# desktop-only break (Rust that won't compile or is unformatted) is caught on the
+# PR instead of surfacing later at `Desktop Release` time.
+#
+# It deliberately does NOT build the installer (that's desktop.yml, on tags) and
+# does NOT rebuild the SolidJS bundle (web.yml owns that) — it only fmt-checks
+# and clippy-lints the Rust.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Least privilege; this only reads the repo.
+permissions:
+  contents: read
+
+jobs:
+  rust-check:
+    name: Rust fmt + clippy
+    # Match the Desktop Release runner: the app ships on Windows, so we lint
+    # against the same target instead of installing Linux WebView system deps.
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: web-desktop/src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (with rustfmt + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Reuse the same Cargo registry + build cache key as the release job so the
+      # two share compiled dependencies.
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: web-desktop/src-tauri
+
+      # Formatting only parses source — no frontend bundle required.
+      - name: cargo fmt (check only, never mutate)
+        run: cargo fmt --all --check
+
+      # clippy compiles the crate, and tauri::generate_context! embeds the
+      # frontendDist (../dist) at compile time. We don't need the real web bundle
+      # to lint Rust — web.yml already validates that — so a placeholder dist
+      # satisfies the macro without rebuilding the SolidJS app.
+      - name: Create placeholder frontend dist
+        working-directory: web-desktop
+        shell: bash
+        run: |
+          mkdir -p dist
+          echo '<!doctype html><meta charset="utf-8"><title>placeholder</title>' > dist/index.html
+
+      - name: cargo clippy (treat warnings as errors)
+        run: cargo clippy --all-targets -- -D warnings
