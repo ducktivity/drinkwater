@@ -196,7 +196,19 @@ func main() {
 	// frontend origins (e.g. the Cloudflare Pages hostname on a different domain
 	// than the API) are appended from CORS_ALLOWED_ORIGINS — a comma-separated
 	// list set in the box's .env — so the deployed web app can call /sync.
-	allowedOrigins := []string{"http://localhost:5173", "tauri://localhost"}
+	//
+	// The Tauri webview's Origin differs by platform, and this holds for the
+	// installed production app too — not just dev. macOS/Linux use the
+	// tauri://localhost custom scheme, while Windows (WebView2) serves the
+	// bundled frontend from http://tauri.localhost (or https://tauri.localhost
+	// when a window enables useHttpsScheme). All three are always allowed so the
+	// desktop shell can reach the API on every target without per-box config.
+	allowedOrigins := []string{
+		"http://localhost:5173",
+		"tauri://localhost",
+		"http://tauri.localhost",
+		"https://tauri.localhost",
+	}
 	if extra := os.Getenv("CORS_ALLOWED_ORIGINS"); extra != "" {
 		for _, origin := range strings.Split(extra, ",") {
 			if origin = strings.TrimSpace(origin); origin != "" {
