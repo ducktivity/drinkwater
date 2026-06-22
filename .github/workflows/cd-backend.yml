@@ -35,8 +35,6 @@ jobs:
             backend:
               - 'backend/**'
               - 'shared-schemas/**'
-              - '.github/workflows/cd-backend.yml'
-              - '.github/workflows/_backend-check.yml'
 
   # Verification gate, extracted into a reusable workflow so the exact same gates
   # also guard the tagged Desktop Release (see _backend-check.yml). The image is
