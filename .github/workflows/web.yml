@@ -1,15 +1,24 @@
 name: Frontend Deploy
 
-# Builds the SolidJS web app and (on main) deploys the static bundle to
-# Cloudflare Pages via Wrangler. Pull requests build only — they validate the
-# bundle compiles but never deploy. This is the lean "get it live" frontend
-# track from docs/deployment-web.md; the full docs/architecture.md §7 promotion
-# gate (deploy AFTER the backend is verified live) layers on later.
+# Builds the SolidJS web app and deploys the static bundle to Cloudflare Pages
+# via Wrangler.
+#
+# Ordering (docs/architecture.md §7: the frontend deploys AFTER the backend):
+#   - Pull requests build only — they validate the bundle compiles, never deploy.
+#   - On main, the deploy is triggered by `workflow_run` AFTER "Backend CI"
+#     finishes, and runs only if that run succeeded. So a push to main builds the
+#     verified backend image first, and only then does the web bundle deploy — a
+#     stale cached SPA never meets an API image that failed to build.
 
 on:
-  push:
-    branches: [main]
   pull_request:
+    branches: [main]
+  # Fires after Backend CI completes on main; the deploy is gated on its success
+  # below. `branches: [main]` scopes this to Backend CI's main runs (a PR's
+  # Backend CI run has the PR's source branch as its head, so it won't match).
+  workflow_run:
+    workflows: ['Backend CI']
+    types: [completed]
     branches: [main]
 
 permissions:
@@ -19,11 +28,21 @@ jobs:
   build-and-deploy:
     name: Build & deploy web to Cloudflare Pages
     runs-on: ubuntu-latest
+    # PRs always build (validation). Post-Backend-CI runs proceed only when that
+    # run both succeeded and was itself a push (not a PR-triggered backend run).
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     defaults:
       run:
         working-directory: web-desktop
     steps:
       - uses: actions/checkout@v4
+        with:
+          # On workflow_run, build the exact commit Backend CI verified rather
+          # than whatever main points at now. On PRs, github.event.workflow_run
+          # is empty, so this falls back to the default PR ref.
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -52,9 +71,9 @@ jobs:
           # localhost default if unset.
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
 
-      # Deploy only for real pushes to main, never for pull requests.
+      # Deploy only on the post-Backend-CI run (main), never on pull requests.
       - name: Deploy to Cloudflare Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'workflow_run'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

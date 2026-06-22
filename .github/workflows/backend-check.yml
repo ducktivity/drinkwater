@@ -1,0 +1,65 @@
+name: Backend Check
+
+# Reusable backend verification gate: format, vet, build, test, staticcheck,
+# gosec — the same gates scripts/check.sh runs locally. It is the single source
+# of truth for "the backend is verified at this commit", called by:
+#   - Backend CI (backend.yml) on every push/PR to main, and
+#   - Desktop Release (desktop.yml) before publishing a tagged installer,
+# so a frontend artifact only ships after a verified backend (architecture.md
+# §7: deploy the frontend after the backend, never before).
+
+on:
+  workflow_call:
+
+# Least privilege; this gate only reads the repo.
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Format, vet, build, test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # Pin Go to whatever go.mod declares, so CI matches local builds.
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: gofmt (check only, never mutate)
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-clean:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        run: go test ./...
+
+      # staticcheck via its official action (by Staticcheck's own author). It
+      # supports working-directory, so it cleanly targets our backend submodule.
+      # install-go: false reuses the Go set up above instead of installing twice.
+      - name: staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: latest
+          install-go: false
+          working-directory: backend
+
+      # gosec is pinned in go.mod (go tool), matching scripts/check.sh. We do not
+      # use securego/gosec's official action: it is a Docker container action with
+      # only an `args` input and always runs at the repo root, so it cannot target
+      # a Go module that lives in a subdirectory (our module is backend/).
+      - name: gosec
+        run: go tool gosec -quiet ./...
