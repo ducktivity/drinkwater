@@ -14,6 +14,16 @@ on:
   push:
     tags:
       - 'v*'
+  # Also callable from cd-tag.yml so a merged version bump can publish the
+  # desktop release without a manually pushed tag (and without a PAT/deploy key).
+  # When called, `tag` is the version tag to publish; tauri-action creates that
+  # tag at the current commit as part of creating the GitHub Release.
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Release tag to create and publish, e.g. v1.2.3'
+        required: true
+        type: string
 
 # tauri-action needs write access to create the Release and upload assets.
 permissions:
@@ -32,6 +42,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history + tags so git-cliff can build the changelog range
+          # (commits since the previous release).
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -57,6 +71,17 @@ jobs:
         working-directory: web-desktop
         run: pnpm install --frozen-lockfile
 
+      # Render the release notes from Conventional Commits since the last
+      # release. When invoked from cd-tag.yml the tag doesn't exist yet, so we
+      # render the unreleased commits labelled with `inputs.tag`; on a manual
+      # tag-push the tag is already at HEAD, so we render the latest section.
+      - name: Generate release notes
+        id: changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: ${{ inputs.tag && format('--unreleased --tag {0}', inputs.tag) || '--latest' }}
+
       - name: Build, sign, and publish release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -73,11 +98,14 @@ jobs:
         with:
           # Run Tauri from the frontend project root.
           projectPath: web-desktop
-          # Name the Release after the pushed tag (e.g. v1.2.3). __VERSION__ is
-          # substituted by tauri-action from tauri.conf.json.
-          tagName: ${{ github.ref_name }}
+          # Name the Release after the tag: the pushed tag on a tag-push, or the
+          # `tag` input when invoked from cd-tag.yml. __VERSION__ is substituted
+          # by tauri-action from tauri.conf.json.
+          tagName: ${{ inputs.tag || github.ref_name }}
           releaseName: 'Drinkwater __VERSION__'
-          releaseBody: 'See the assets below to download and install. Installed copies update themselves automatically.'
+          # Changelog generated above (cliff.toml appends the download/install
+          # footer). Falls back to a static line if git-cliff produced nothing.
+          releaseBody: ${{ steps.changelog.outputs.content || 'See the assets below to download and install. Installed copies update themselves automatically.' }}
           # Publish immediately (not a draft) so the auto-updater can read
           # latest.json from the "latest release" URL right away.
           releaseDraft: false

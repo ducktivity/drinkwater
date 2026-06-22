@@ -1,0 +1,68 @@
+name: Auto Tag Release
+
+# When a desktop version bump lands on main (e.g. a merged "chore: release
+# vX.Y.Z" PR), read the version from web-desktop/package.json and, if no release
+# for that version exists yet, publish the desktop release for it.
+#
+# This makes "merge the release PR" the single action: the same push to main
+# deploys backend + web (their own workflows), and this workflow publishes the
+# desktop build. Manual tagging (git tag vX.Y.Z && git push origin vX.Y.Z) still
+# works too — this is a no-op when the tag already exists.
+#
+# No PAT / deploy key needed: instead of *pushing* a tag (an event the default
+# GITHUB_TOKEN is not allowed to use to trigger other workflows), we *call*
+# cd-desktop.yml directly via workflow_call. tauri-action creates the tag itself
+# when it publishes the Release.
+
+on:
+  push:
+    branches: [main]
+    # Only bother when the version file could have changed.
+    paths:
+      - 'web-desktop/package.json'
+
+# Capped permissions for the called cd-desktop workflow (it creates the Release).
+permissions:
+  contents: write
+
+jobs:
+  # Decide the tag from package.json and whether it still needs releasing.
+  # A reusable-workflow call (`uses:`) can't share a job with steps, so the
+  # version check lives in its own job and feeds the desktop job below.
+  check:
+    name: Resolve version & whether to release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.ver.outputs.tag }}
+      should_release: ${{ steps.ver.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history + tags so the existence check below is reliable.
+          fetch-depth: 0
+
+      - name: Read version and check for an existing tag
+        id: ver
+        run: |
+          version=$(node -p "require('./web-desktop/package.json').version")
+          tag="v$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "Tag $tag already exists — skipping release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version $version is new — will publish $tag."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Publish the desktop release by calling the existing workflow. secrets:inherit
+  # passes through the Tauri signing secrets it needs; repository `vars` are
+  # available to called workflows automatically.
+  desktop:
+    name: Publish desktop release
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
+    uses: ./.github/workflows/cd-desktop.yml
+    with:
+      tag: ${{ needs.check.outputs.tag }}
+    secrets: inherit
