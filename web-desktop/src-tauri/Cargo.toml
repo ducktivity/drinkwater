@@ -28,3 +28,7 @@ tauri-plugin-notification = "2"
 # and applies it. `process` provides the relaunch-after-update call.
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+# Run-on-startup: registers/removes the OS login entry (Windows registry Run key)
+# and lets the frontend toggle it. Launched with `--autostart` so we can start
+# hidden in the tray on login rather than popping the window in the user's face.
+tauri-plugin-autostart = "2"

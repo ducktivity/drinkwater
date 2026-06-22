@@ -1,9 +1,11 @@
-import { createEffect, onCleanup, type JSX } from 'solid-js'
+import { createEffect, onCleanup, Show, type JSX } from 'solid-js'
 import { useOverlay } from '../../context/OverlayContext'
+import { isAutostartSupported } from '../../autostart'
 import { AccountSection } from './AccountSection'
 import { GoalSettingsSection } from './GoalSettingsSection'
 import { ScheduleSettings } from './ScheduleSettings'
 import { ReminderSettings } from './ReminderSettings'
+import { StartupSettings } from './StartupSettings'
 
 /** A labelled group of related settings within the drawer. */
 function Section(props: { title: string; children: JSX.Element }) {
@@ -111,6 +113,13 @@ export function SettingsDrawer() {
           <Section title="Reminders">
             <ReminderSettings />
           </Section>
+
+          {/* Desktop-only: hidden on the web build, where there's no OS login. */}
+          <Show when={isAutostartSupported()}>
+            <Section title="Startup">
+              <StartupSettings />
+            </Section>
+          </Show>
         </div>
       </aside>
     </div>

@@ -12,6 +12,13 @@ pub fn run() {
     // `process` exposes relaunch so the app can restart itself after applying.
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_process::init())
+    // Run-on-startup. The `--autostart` arg is what the OS login entry launches
+    // the app with, so we can detect a startup launch (vs. a manual one) below
+    // and start hidden in the tray instead of showing the window.
+    .plugin(tauri_plugin_autostart::init(
+      tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+      Some(vec!["--autostart"]),
+    ))
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -19,6 +26,15 @@ pub fn run() {
             .level(log::LevelFilter::Info)
             .build(),
         )?;
+      }
+
+      // When launched at login (the OS passes `--autostart`), keep the window
+      // hidden so the app sits quietly in the tray rather than popping up. A
+      // normal manual launch leaves the window visible as usual.
+      if std::env::args().any(|arg| arg == "--autostart") {
+        if let Some(window) = app.get_webview_window("main") {
+          let _ = window.hide();
+        }
       }
 
       // Build the tray's right-click context menu. "Exit" is the only way to
