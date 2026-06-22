@@ -20,7 +20,7 @@ jobs:
   # published only after this passes.
   check:
     name: Verify backend before image release
-    uses: ./.github/workflows/checks/_backend-check.yml
+    uses: ./.github/workflows/_backend-check.yml
 
   image:
     name: Build & push image to GHCR

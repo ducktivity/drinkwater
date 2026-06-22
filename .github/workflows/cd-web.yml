@@ -19,7 +19,7 @@ permissions:
 jobs:
   check:
     name: Verify web before deploy
-    uses: ./.github/workflows/checks/_web-check.yml
+    uses: ./.github/workflows/_web-check.yml
 
   deploy:
     name: Build & deploy web to Cloudflare Pages

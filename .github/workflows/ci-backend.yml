@@ -13,4 +13,4 @@ permissions:
 jobs:
   check:
     name: Verify backend
-    uses: ./.github/workflows/checks/_backend-check.yml
+    uses: ./.github/workflows/_backend-check.yml

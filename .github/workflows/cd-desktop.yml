@@ -23,11 +23,11 @@ jobs:
 
   desktop-check:
     name: Verify Tauri before release
-    uses: ./.github/workflows/checks/_desktop-check.yml
+    uses: ./.github/workflows/_desktop-check.yml
 
   release:
     name: Build & publish Windows installer
-    needs: [backend-check, web-check, desktop-check]
+    needs: [desktop-check]
     runs-on: windows-latest
 
     steps:
