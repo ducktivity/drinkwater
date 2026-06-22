@@ -8,6 +8,10 @@ use tauri::{
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_notification::init())
+    // Auto-update plugins. `updater` exposes the JS check/download/install API;
+    // `process` exposes relaunch so the app can restart itself after applying.
+    .plugin(tauri_plugin_updater::Builder::new().build())
+    .plugin(tauri_plugin_process::init())
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(

@@ -1,0 +1,79 @@
+name: Desktop Release
+
+# Builds the Tauri Windows desktop app and publishes a GitHub Release with the
+# installer + signed update artifacts attached. This is the distribution track:
+# the published Release is what the public downloads from, and the auto-updater
+# (tauri-plugin-updater) reads `latest.json` from the latest Release to push
+# smooth in-app updates to installed copies.
+#
+# Trigger: pushing a version tag like `v1.2.3`. Bump the version first with
+# `pnpm run release <version>` (see docs/release-desktop.md), commit, then push
+# the tag. `workflow_dispatch` is also allowed for manual re-runs.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# tauri-action needs write access to create the Release and upload assets.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & publish Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web-desktop/pnpm-lock.yaml
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # Cache the Cargo registry + the Rust build dir so repeat releases don't
+      # recompile every dependency from scratch.
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: web-desktop/src-tauri
+
+      - name: Install frontend dependencies
+        working-directory: web-desktop
+        run: pnpm install --frozen-lockfile
+
+      - name: Build, sign, and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          # Provided automatically by Actions; lets tauri-action create the
+          # GitHub Release and upload the installer + latest.json.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater signing key (generated with `pnpm tauri signer generate`).
+          # The public half lives in tauri.conf.json; these two are repo secrets.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Backend URL baked into the bundle (same repo variable the web build
+          # uses). Falls back to the localhost default if unset.
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+        with:
+          # Run Tauri from the frontend project root.
+          projectPath: web-desktop
+          # Name the Release after the pushed tag (e.g. v1.2.3). __VERSION__ is
+          # substituted by tauri-action from tauri.conf.json.
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Drinkwater __VERSION__'
+          releaseBody: 'See the assets below to download and install. Installed copies update themselves automatically.'
+          # Publish immediately (not a draft) so the auto-updater can read
+          # latest.json from the "latest release" URL right away.
+          releaseDraft: false
+          prerelease: false
