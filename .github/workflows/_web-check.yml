@@ -34,6 +34,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Generated-artifact drift check (architecture.md §7). The TS API types
+      # (src/types/schema.d.ts) and the converted OpenAPI 3 spec
+      # (shared-schemas/openapi.json) are generated from the backend's
+      # swagger.json via swagger2openapi + openapi-typescript. Re-run the
+      # generator and assert the working tree is unchanged: a non-empty diff
+      # means the committed types lag the schema. Check only — fails the job
+      # rather than committing the regenerated files. Runs before typecheck so a
+      # stale schema is surfaced as a drift failure, not a confusing type error.
+      - name: Generated-artifact drift (openapi + schema.d.ts)
+        run: |
+          pnpm run generate-types
+          if [ -n "$(git status --porcelain -- ../shared-schemas/openapi.json src/types/schema.d.ts)" ]; then
+            echo "::error::Generated types are stale. Run 'pnpm run generate-types' from web-desktop/ and commit ../shared-schemas/openapi.json and src/types/schema.d.ts."
+            git status --porcelain -- ../shared-schemas/openapi.json src/types/schema.d.ts
+            git diff -- ../shared-schemas/openapi.json src/types/schema.d.ts
+            exit 1
+          fi
+
       - name: Typecheck
         run: pnpm run typecheck
 

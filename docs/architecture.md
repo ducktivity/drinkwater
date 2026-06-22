@@ -209,8 +209,8 @@ graph TD
     PR -->|triggers| CIW["Web CI<br/>(check)"]
     PR -->|triggers| CID["Desktop CI<br/>(check)"]
 
-    CIB -->|calls| CheckB["_backend-check.yml<br/>gofmt, go vet, go build, test, staticcheck, gosec"]
-    CIW -->|calls| CheckW["_web-check.yml<br/>typecheck, lint, build"]
+    CIB -->|calls| CheckB["_backend-check.yml<br/>gofmt, go vet, go build, test, staticcheck, gosec, gen drift"]
+    CIW -->|calls| CheckW["_web-check.yml<br/>typecheck, lint, build, gen drift"]
     CID -->|calls| CheckD["_desktop-check.yml<br/>cargo fmt, clippy"]
 
     CheckB -->|must pass| Merge["Merge to main<br/>(branch protection)"]
@@ -250,8 +250,8 @@ Nine workflow files implement the flow: three **reusable verification gates** (t
 
 | Workflow | What it checks |
 | --- | --- |
-| `_backend-check.yml` | gofmt, `go vet`, `go build`, `go test`, staticcheck, gosec |
-| `_web-check.yml` | `pnpm run typecheck`, `pnpm run lint`, `pnpm run build` |
+| `_backend-check.yml` | gofmt, `go vet`, `go build`, `go test`, staticcheck, gosec, generated-artifact drift (`export-swagger.sh` + `db-codegen.sh` produce no diff) |
+| `_web-check.yml` | `pnpm run typecheck`, `pnpm run lint`, `pnpm run build`, generated-artifact drift (`generate-types` produces no diff) |
 | `_desktop-check.yml` | `cargo fmt --check` + `cargo clippy -D warnings` on `src-tauri` (with placeholder `dist/`) |
 
 **CI/CD workflows:**
@@ -271,6 +271,7 @@ Consequences worth stating explicitly:
 - **PRs are check-only.** No image, no Pages deploy, no installer is ever produced from a pull request.
 - **Frontend after backend.** The web bundle can only deploy after Backend CD is green for that commit (cross-workflow `workflow_run`), and Desktop Release fires off the **same** `workflow_run` signal — so neither client artifact ships ahead of a backend image that failed to build. The expand-only API rule (below) keeps them compatible in the window before the operator runs the Ansible deploy.
 - **CD re-verifies before deployment.** The `cd-*` workflows re-run all checks before publishing artifacts, providing a safety layer against environment drift or race conditions (belt-and-suspenders). The actual production rollout is the operator's `ansible-playbook` run (below). "Verified backend" in CI means *the image built and the gate passed*, not *the new backend is live in prod*.
+- **Generated artifacts can't drift.** Both gates re-run their code generators and fail on any diff against the committed output, keeping the SSOT pipeline (§2) honest. `_backend-check.yml` re-runs `export-swagger.sh` + `db-codegen.sh` and asserts no change to `shared-schemas/swagger.json` or `database/dbgen`; `_web-check.yml` re-runs `generate-types` and asserts no change to `shared-schemas/openapi.json` or `src/types/schema.d.ts`. A schema/query edit that wasn't regenerated, or stale frontend types, fails the PR — and again at CD re-check before any artifact ships.
 
 ### Image Tagging & Rollback
 
@@ -360,9 +361,8 @@ This ensures every commit on `main` is verified by all three check gates. CD wor
 
 ### Deferred CI Gates (not yet wired)
 
-The following are the north-star quality gates; the expand-only discipline (above) holds the line until they land, and they can be added to the relevant workflow independently:
+The following is the remaining north-star quality gate; the expand-only discipline (above) holds the line until it lands, and it can be added to the relevant workflow independently:
 
-- Generated-artifact **drift checks** — `export-swagger.sh` / `db-codegen.sh` (backend) and `generate-types` (web) produce no diff against the committed output.
 - **Ephemeral-Postgres migration tests** — new goose migrations apply cleanly (and down-migrations exist) against a throwaway Postgres in CI.
 
 ---

@@ -63,3 +63,22 @@ jobs:
       # a Go module that lives in a subdirectory (our module is backend/).
       - name: gosec
         run: go tool gosec -quiet ./...
+
+      # Generated-artifact drift check (architecture.md §7). The OpenAPI spec
+      # (shared-schemas/swagger.json) and the sqlc Go code (database/dbgen) are
+      # the committed output of generators driven off the DB schema/queries —
+      # the SSOT pipeline. Re-run those generators and assert the working tree is
+      # unchanged: a non-empty diff means someone edited the schema or queries
+      # without regenerating, so the committed artifacts have drifted. This is a
+      # check only — it fails the job rather than committing the regenerated
+      # files. swag and sqlc are the same go-tool versions scripts/check.sh uses.
+      - name: Generated-artifact drift (swagger + sqlc)
+        run: |
+          ./scripts/export-swagger.sh
+          ./scripts/db-codegen.sh
+          if [ -n "$(git status --porcelain -- ../shared-schemas/swagger.json database/dbgen)" ]; then
+            echo "::error::Generated artifacts are stale. Run ./scripts/export-swagger.sh and ./scripts/db-codegen.sh from backend/ and commit the result."
+            git status --porcelain -- ../shared-schemas/swagger.json database/dbgen
+            git diff -- ../shared-schemas/swagger.json database/dbgen
+            exit 1
+          fi
