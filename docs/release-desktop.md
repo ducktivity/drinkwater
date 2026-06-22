@@ -5,10 +5,10 @@
 From `web-desktop`:
 
 ```
-pnpm run release 1.0.0        # bumps package.json + tauri.conf.json + Cargo.toml
+pnpm run release 0.2.0        # bumps package.json + tauri.conf.json + Cargo.toml
 git commit -am "chore: release v1.0.0"
 git tag v1.0.0
-git push && git push --tags
+git push origin main --tags
 ```
 
 Pushing the tag runs the workflow. When it finishes, the GitHub Release is

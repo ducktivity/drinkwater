@@ -197,49 +197,79 @@ Three artifacts ship from one monorepo on independent timelines and must stay mu
 
 ### Pipeline Overview
 
-CI publishes/deploys artifacts **only when `main` is actually updated** — a push/merge to `main` (backend image + web bundle) or a `v*` tag (desktop installer). **Pull requests run checks only** and ship nothing. The frontends are ordered **strictly after a verified backend**: the web deploy is gated on Backend CD succeeding for the same commit, and the tagged desktop release runs the same backend verification gate before publishing.
+**Pull requests:** Three CI workflows (`ci-backend.yml`, `ci-web.yml`, `ci-desktop.yml`) validate every PR before merge. Each calls a reusable check workflow (`_backend-check.yml`, `_web-check.yml`, `_desktop-check.yml`). Branch protection requires all three to pass. **PRs ship nothing.**
+
+**Pushes to main:** After merge, three CD workflows (`cd-backend.yml`, `cd-web.yml`, `cd-desktop.yml`) run on the new commit. Each CD workflow **re-runs the same checks** (belt-and-suspenders safety) before publishing artifacts. Backend image goes to GHCR; web bundle deploys to Cloudflare Pages **only after** Backend CD succeeds (via `workflow_run`).
+
+**Version tags:** Desktop Release (`cd-desktop.yml`) runs **all three checks** before building and publishing the installer, ensuring no desktop client ships ahead of a verified backend.
 
 ```mermaid
 graph TD
-    Push[Push / merge to main] --> BCI
-    Tag[Push v* tag] --> DREL
+    PR["Pull Request to main"] -->|triggers| CIB["Backend CI<br/>(check)"]
+    PR -->|triggers| CIW["Web CI<br/>(check)"]
+    PR -->|triggers| CID["Desktop CI<br/>(check)"]
 
-    subgraph CI["GitHub Actions - never touches the server"]
-        BCI["Backend CD<br/>verify gate"] -->|on push to main| Img[Build backend image]
-        Img -->|"push :sha-GITSHA immutable + move :latest"| GHCR[(GHCR registry)]
-        BCI -->|"on success, workflow_run"| FE["Web Deploy<br/>build SPA"]
-        FE -->|"wrangler deploy (main only)"| Pages[Cloudflare Pages]
-        Push --> DCI["Desktop CI<br/>Rust fmt + clippy"]
+    CIB -->|calls| CheckB["_backend-check.yml<br/>gofmt, go vet, go build, test, staticcheck, gosec"]
+    CIW -->|calls| CheckW["_web-check.yml<br/>typecheck, lint, build"]
+    CID -->|calls| CheckD["_desktop-check.yml<br/>cargo fmt, clippy"]
 
-        DREL["Desktop Release<br/>verify-backend gate"] --> DBuild[Tauri build + sign]
-        DBuild -->|"installer + latest.json"| GHREL[(GitHub Release)]
-    end
+    CheckB -->|must pass| Merge["Merge to main<br/>(branch protection)"]
+    CheckW -->|must pass| Merge
+    CheckD -->|must pass| Merge
 
-    Laptop["Operator laptop<br/>ansible-playbook deploy.yml"] -->|"Cloudflare Access SSH<br/>service token, no open port"| Box
-    GHCR -->|docker compose pull| Box
+    Merge -->|triggers| CDB["Backend CD<br/>(re-check + deploy)"]
+    CDB -->|calls| CheckB2["_backend-check.yml<br/>same checks"]
+    CheckB2 -->|pass| Img["Build & push image<br/>to GHCR"]
+
+    Img -->|triggers via workflow_run| CDW["Web Deploy<br/>(re-check + deploy)"]
+    CDW -->|calls| CheckW2["_web-check.yml<br/>same checks"]
+    CheckW2 -->|pass| Pages["Deploy to<br/>Cloudflare Pages"]
+
+    Tag["Push v* tag"] -->|triggers| CDD["Desktop Release<br/>(verify all)"]
+    CDD -->|calls| CheckB3["_backend-check.yml"]
+    CDD -->|calls| CheckW3["_web-check.yml"]
+    CDD -->|calls| CheckD3["_desktop-check.yml"]
+    CheckB3 -->|all 3 pass| DBuild["Build & publish<br/>installer + latest.json<br/>to GitHub Release"]
+    CheckW3 -->|all 3 pass| DBuild
+    CheckD3 -->|all 3 pass| DBuild
+
+    Img -->|docker pull| Box
+    Laptop["Operator laptop<br/>ansible-playbook deploy.yml"] -->|"Cloudflare Access SSH<br/>service token"| Box
 
     subgraph HZ["Hetzner box - outbound only, no agent"]
-        Box["Ansible reconcile:<br/>git sync, render .env, pull, compose up, /readyz gate"]
+        Box["Reconcile:<br/>git sync, render .env, pull, compose up, /readyz gate"]
     end
 ```
 
 ### CI Workflows: Triggers & Gating
 
-Five workflow files implement the flow. A single **reusable backend verification gate** is the one definition of "the backend is sound at this commit", shared by both pipelines that need it so they can't drift:
+Eight workflow files implement the flow: three **reusable verification gates** (the single source of truth for "this component is sound at this commit") and five **CI/CD entry points**. Reusable workflows are called by both PR-time CI and by CD pipelines, ensuring they can't drift.
+
+**Reusable verification gates:**
+
+| Workflow | What it checks |
+| --- | --- |
+| `_backend-check.yml` | gofmt, `go vet`, `go build`, `go test`, staticcheck, gosec |
+| `_web-check.yml` | `pnpm run typecheck`, `pnpm run lint`, `pnpm run build` |
+| `_desktop-check.yml` | `cargo fmt --check` + `cargo clippy -D warnings` on `src-tauri` (with placeholder `dist/`) |
+
+**CI/CD workflows:**
 
 | Workflow | Trigger | What it does | Publishes / deploys? |
 | --- | --- | --- | --- |
-| `_backend-check.yml` (reusable) | called by the two below | gofmt, `go vet`, `go build`, `go test`, staticcheck, gosec | no — verification only |
-| `cd-backend.yml` — **Backend CD** | push + PR to `main` | runs the gate; on **push to `main`** also builds & pushes the image to GHCR | image → GHCR (push to `main` only) |
-| `cd-web.yml` — **Web Deploy** | PR to `main`; `workflow_run` after Backend CD on `main` | PR: typecheck + lint + build (validation). Main: rebuilds the verified commit and deploys, **only if Backend CD succeeded** | Cloudflare Pages (after a green Backend CD on `main`) |
-| `ci-desktop.yml` — **Desktop CI** | push + PR to `main` | `cargo fmt --check` + `cargo clippy -D warnings` on `src-tauri` only (the shared SolidJS is already validated by `cd-web.yml`) | no — verification only |
-| `cd-desktop.yml` — **Desktop Release** | `v*` tag push only | runs the reusable backend gate, then builds & signs the Tauri installer and publishes it + `latest.json` to a GitHub Release for the auto-updater | GitHub Release (tag only) |
+| `ci-backend.yml` — **Backend CI** | PR to `main` | calls `_backend-check.yml` | no — verification only |
+| `ci-web.yml` — **Web CI** | PR to `main` | calls `_web-check.yml` | no — verification only |
+| `ci-desktop.yml` — **Desktop CI** | PR to `main` | calls `_desktop-check.yml` (Rust only; SolidJS is in `ci-web.yml`) | no — verification only |
+| `cd-backend.yml` — **Backend CD** | push to `main` | calls `_backend-check.yml`, then builds & pushes the image to GHCR | image → GHCR (push to `main` only) |
+| `cd-web.yml` — **Web Deploy** | `workflow_run` after Backend CD on `main` | calls `_web-check.yml`, then rebuilds the verified commit and deploys to Cloudflare Pages **only if Backend CD succeeded** | Cloudflare Pages (after a green Backend CD on `main`) |
+| `cd-desktop.yml` — **Desktop Release** | `v*` tag push only | calls `_backend-check.yml`, `_web-check.yml`, and `_desktop-check.yml`, then builds & signs the Tauri installer and publishes to GitHub Release | GitHub Release (tag only) |
 
 Consequences worth stating explicitly:
 
+- **CI is PR-only.** The `ci-*` workflows validate every PR before merge. The `cd-*` workflows (which run on push to main / tag) re-run the same checks before publishing, ensuring a verified state at deployment time.
 - **PRs are check-only.** No image, no Pages deploy, no installer is ever produced from a pull request.
-- **Frontend after backend.** The web bundle can only deploy after Backend CD is green for that commit (cross-workflow `workflow_run`), and the desktop installer can only publish after the same gate passes — so a client artifact never ships ahead of a backend image that failed to build. The expand-only API rule (below) keeps them compatible in the window before the operator runs the Ansible deploy.
-- **CI never deploys the backend.** It only publishes the image; the actual production rollout is the operator's `ansible-playbook` run (below). "Verified backend" in CI means *the image built and the gate passed*, not *the new backend is live in prod*.
+- **Frontend after backend.** The web bundle can only deploy after Backend CD is green for that commit (cross-workflow `workflow_run`), and the desktop installer can only publish after all gates pass — so a client artifact never ships ahead of a backend image that failed to build. The expand-only API rule (below) keeps them compatible in the window before the operator runs the Ansible deploy.
+- **CD re-verifies before deployment.** The `cd-*` workflows re-run all checks before publishing artifacts, providing a safety layer against environment drift or race conditions (belt-and-suspenders). The actual production rollout is the operator's `ansible-playbook` run (below). "Verified backend" in CI means *the image built and the gate passed*, not *the new backend is live in prod*.
 
 ### Image Tagging & Rollback
 
@@ -317,15 +347,25 @@ The per-release **deployment order** is therefore:
 
 The additive-only rule and this ordering keep schema, backend, and frontend compatible across their three independent timelines.
 
+### Branch Protection & Required Status Checks
+
+Before any PR can merge to `main`, GitHub branch protection must require these status checks to pass:
+
+- **Backend CI** (`ci-backend.yml`)
+- **Web CI** (`ci-web.yml`)
+- **Desktop CI** (`ci-desktop.yml`)
+
+This ensures every commit on `main` is verified by all three check gates. CD workflows (`cd-backend.yml`, `cd-web.yml`, `cd-desktop.yml`) then re-run the same checks before publishing, providing a safety layer (belt-and-suspenders) against environment drift or race conditions.
+
 ### What CI Actually Runs
 
-The gates currently wired, mirroring what a developer runs locally before a build becomes a candidate image:
+Each reusable gate mirrors what a developer runs locally via CLAUDE.md scripts:
 
 - **Backend** (`_backend-check.yml`): `gofmt` clean, `go vet`, `go build`, `go test`, **staticcheck**, and **gosec** — the same set as `scripts/check.sh`.
-- **Web** (`cd-web.yml`): `pnpm run typecheck`, `pnpm run lint` (ESLint + Tailwind), and `pnpm run build`.
-- **Desktop** (`ci-desktop.yml`): `cargo fmt --check` and `cargo clippy -D warnings` on the `src-tauri` Rust crate (a placeholder `dist/` satisfies `generate_context!` so the lint runs without rebuilding the SPA).
+- **Web** (`_web-check.yml`): `pnpm run typecheck`, `pnpm run lint` (ESLint + Tailwind), and `pnpm run build`.
+- **Desktop** (`_desktop-check.yml`): `cargo fmt --check` and `cargo clippy -D warnings` on the `src-tauri` Rust crate (a placeholder `dist/` satisfies `generate_context!` so the lint runs without rebuilding the SPA).
 
-The backend image is pushed (tagged `:sha-<gitsha>` and `:latest`) only after the backend gate passes on a push to `main`, making it eligible for the next `ansible-playbook` deploy. The web bundle deploys only after that same Backend CD run succeeds.
+The backend image is pushed (tagged `:sha-<gitsha>` and `:latest`) only after the backend gate passes on a push to `main`, making it eligible for the next `ansible-playbook` deploy. The web bundle deploys only after that same Backend CD run succeeds. The desktop installer publishes only after all three gates pass at tag time.
 
 **Deferred CI gates (not yet wired).** The following are the north-star quality gates; the expand-only discipline (above) holds the line until they land, and they can be added to the relevant workflow independently:
 
