@@ -199,9 +199,9 @@ Three artifacts ship from one monorepo on independent timelines and must stay mu
 
 **Pull requests:** Three CI workflows (`ci-backend.yml`, `ci-web.yml`, `ci-desktop.yml`) validate every PR before merge. Each calls a reusable check workflow (`_backend-check.yml`, `_web-check.yml`, `_desktop-check.yml`). Branch protection requires all three to pass. **PRs ship nothing.**
 
-**Pushes to main:** After merge, three CD workflows (`cd-backend.yml`, `cd-web.yml`, `cd-desktop.yml`) run on the new commit. Each CD workflow **re-runs the same checks** (belt-and-suspenders safety) before publishing artifacts. Backend image goes to GHCR; web bundle deploys to Cloudflare Pages **only after** Backend CD succeeds (via `workflow_run`).
+**Pushes to main:** After merge, **Backend CD** (`cd-backend.yml`) runs on the new commit, re-runs the backend checks (belt-and-suspenders), and pushes the image to GHCR. Its success then fans out via `workflow_run` to two deploys that rebuild the verified commit: **Web Deploy** (`cd-web.yml`) to Cloudflare Pages, and **Desktop Release** (`cd-desktop.yml`), which publishes a new installer **only when the desktop version was bumped** (see below). So the backend goes live first, then web and desktop publish in parallel off the same verified commit.
 
-**Version tags:** Desktop Release (`cd-desktop.yml`) runs **all three checks** before building and publishing the installer, ensuring no desktop client ships ahead of a verified backend.
+**Desktop releases:** Desktop Release (`cd-desktop.yml`) is **version-gated**. After a green Backend CD it reads the desktop version from `web-desktop/package.json`; if that version has no `vX.Y.Z` tag yet, a `decide` job runs the web + desktop checks (the backend was already verified upstream), builds and signs the Tauri installer, and publishes a GitHub Release — auto-creating the tag and generating the release notes from Conventional Commits with **git-cliff**. If the version is already released, every job is skipped and the run finishes green (a skipped job is not a failure). Pushing a `v*` tag manually is a fallback that forces a desktop-only release, bypassing the backend gate.
 
 ```mermaid
 graph TD
@@ -225,13 +225,14 @@ graph TD
     CDW -->|calls| CheckW2["_web-check.yml<br/>same checks"]
     CheckW2 -->|pass| Pages["Deploy to<br/>Cloudflare Pages"]
 
-    Tag["Push v* tag"] -->|triggers| CDD["Desktop Release<br/>(verify all)"]
-    CDD -->|calls| CheckB3["_backend-check.yml"]
-    CDD -->|calls| CheckW3["_web-check.yml"]
-    CDD -->|calls| CheckD3["_desktop-check.yml"]
-    CheckB3 -->|all 3 pass| DBuild["Build & publish<br/>installer + latest.json<br/>to GitHub Release"]
-    CheckW3 -->|all 3 pass| DBuild
-    CheckD3 -->|all 3 pass| DBuild
+    Img -->|triggers via workflow_run| CDD["Desktop Release<br/>(version-gated)"]
+    Tag["Push v* tag<br/>(manual fallback)"] -->|triggers| CDD
+    CDD --> Decide{"new desktop version?<br/>(package.json has no tag yet)"}
+    Decide -->|"no — already released"| Skip["skip all jobs<br/>(run stays green)"]
+    Decide -->|yes| CheckW3["_web-check.yml"]
+    Decide -->|yes| CheckD3["_desktop-check.yml"]
+    CheckW3 -->|pass| DBuild["Build & publish<br/>installer + latest.json<br/>+ git-cliff notes<br/>to GitHub Release"]
+    CheckD3 -->|pass| DBuild
 
     Img -->|docker pull| Box
     Laptop["Operator laptop<br/>ansible-playbook deploy.yml"] -->|"Cloudflare Access SSH<br/>service token"| Box
@@ -243,7 +244,7 @@ graph TD
 
 ### CI Workflows: Triggers & Gating
 
-Eight workflow files implement the flow: three **reusable verification gates** (the single source of truth for "this component is sound at this commit") and five **CI/CD entry points**. Reusable workflows are called by both PR-time CI and by CD pipelines, ensuring they can't drift.
+Nine workflow files implement the flow: three **reusable verification gates** (the single source of truth for "this component is sound at this commit") and six **CI/CD entry points**. Reusable workflows are called by both PR-time CI and by CD pipelines, ensuring they can't drift.
 
 **Reusable verification gates:**
 
@@ -262,13 +263,13 @@ Eight workflow files implement the flow: three **reusable verification gates** (
 | `ci-desktop.yml` — **Desktop CI** | PR to `main` | calls `_desktop-check.yml` (Rust only; SolidJS is in `ci-web.yml`) | no — verification only |
 | `cd-backend.yml` — **Backend CD** | push to `main` | calls `_backend-check.yml`, then builds & pushes the image to GHCR | image → GHCR (push to `main` only) |
 | `cd-web.yml` — **Web Deploy** | `workflow_run` after Backend CD on `main` | calls `_web-check.yml`, then rebuilds the verified commit and deploys to Cloudflare Pages **only if Backend CD succeeded** | Cloudflare Pages (after a green Backend CD on `main`) |
-| `cd-desktop.yml` — **Desktop Release** | `v*` tag push only | calls `_backend-check.yml`, `_web-check.yml`, and `_desktop-check.yml`, then builds & signs the Tauri installer and publishes to GitHub Release | GitHub Release (tag only) |
+| `cd-desktop.yml` — **Desktop Release** | `workflow_run` after Backend CD on `main` (auto, version-gated) **or** `v*` tag push (manual fallback) | `decide` gate publishes only when `web-desktop/package.json`'s version has no tag yet (otherwise skips → green); then calls `_web-check.yml` + `_desktop-check.yml`, builds & signs the Tauri installer, and publishes to GitHub Release — auto-creating the `vX.Y.Z` tag and git-cliff release notes | GitHub Release (on a new desktop version, or a manual tag) |
 
 Consequences worth stating explicitly:
 
-- **CI is PR-only.** The `ci-*` workflows validate every PR before merge. The `cd-*` workflows (which run on push to main / tag) re-run the same checks before publishing, ensuring a verified state at deployment time.
+- **CI is PR-only.** The `ci-*` workflows validate every PR before merge. The `cd-*` workflows (which run on push to main, on Backend CD success, or on a manual tag) re-run the relevant checks before publishing, ensuring a verified state at deployment time.
 - **PRs are check-only.** No image, no Pages deploy, no installer is ever produced from a pull request.
-- **Frontend after backend.** The web bundle can only deploy after Backend CD is green for that commit (cross-workflow `workflow_run`), and the desktop installer can only publish after all gates pass — so a client artifact never ships ahead of a backend image that failed to build. The expand-only API rule (below) keeps them compatible in the window before the operator runs the Ansible deploy.
+- **Frontend after backend.** The web bundle can only deploy after Backend CD is green for that commit (cross-workflow `workflow_run`), and Desktop Release fires off the **same** `workflow_run` signal — so neither client artifact ships ahead of a backend image that failed to build. The expand-only API rule (below) keeps them compatible in the window before the operator runs the Ansible deploy.
 - **CD re-verifies before deployment.** The `cd-*` workflows re-run all checks before publishing artifacts, providing a safety layer against environment drift or race conditions (belt-and-suspenders). The actual production rollout is the operator's `ansible-playbook` run (below). "Verified backend" in CI means *the image built and the gate passed*, not *the new backend is live in prod*.
 
 ### Image Tagging & Rollback
@@ -343,7 +344,7 @@ The per-release **deployment order** is therefore:
 
 1. **DB migration** (additive) — applied before the backend that depends on it (a one-shot `goose` container in the playbook, before `compose up`).
 2. **Backend** — `ansible-playbook` pulls the new image and recreates the app behind the `/readyz` gate.
-3. **Frontend (Cloudflare Pages)** — deployed via `wrangler` in CI, gated to run **after** Backend CD succeeds for the same commit (Web Deploy is triggered by Backend CD via `workflow_run`), so the bundle never ships ahead of a backend image that failed to build. The tagged desktop release applies the same rule via a shared reusable backend-verification gate before publishing the installer. The API removed nothing, so the previously cached frontend keeps working regardless; the new bundle becomes available on the next client load.
+3. **Frontend (Cloudflare Pages)** — deployed via `wrangler` in CI, gated to run **after** Backend CD succeeds for the same commit (Web Deploy is triggered by Backend CD via `workflow_run`), so the bundle never ships ahead of a backend image that failed to build. Desktop Release applies the same rule by firing off that same green-Backend-CD `workflow_run` signal before publishing the installer. The API removed nothing, so the previously cached frontend keeps working regardless; the new bundle becomes available on the next client load.
 
 The additive-only rule and this ordering keep schema, backend, and frontend compatible across their three independent timelines.
 
@@ -357,17 +358,9 @@ Before any PR can merge to `main`, GitHub branch protection must require these s
 
 This ensures every commit on `main` is verified by all three check gates. CD workflows (`cd-backend.yml`, `cd-web.yml`, `cd-desktop.yml`) then re-run the same checks before publishing, providing a safety layer (belt-and-suspenders) against environment drift or race conditions.
 
-### What CI Actually Runs
+### Deferred CI Gates (not yet wired)
 
-Each reusable gate mirrors what a developer runs locally via CLAUDE.md scripts:
-
-- **Backend** (`_backend-check.yml`): `gofmt` clean, `go vet`, `go build`, `go test`, **staticcheck**, and **gosec** — the same set as `scripts/check.sh`.
-- **Web** (`_web-check.yml`): `pnpm run typecheck`, `pnpm run lint` (ESLint + Tailwind), and `pnpm run build`.
-- **Desktop** (`_desktop-check.yml`): `cargo fmt --check` and `cargo clippy -D warnings` on the `src-tauri` Rust crate (a placeholder `dist/` satisfies `generate_context!` so the lint runs without rebuilding the SPA).
-
-The backend image is pushed (tagged `:sha-<gitsha>` and `:latest`) only after the backend gate passes on a push to `main`, making it eligible for the next `ansible-playbook` deploy. The web bundle deploys only after that same Backend CD run succeeds. The desktop installer publishes only after all three gates pass at tag time.
-
-**Deferred CI gates (not yet wired).** The following are the north-star quality gates; the expand-only discipline (above) holds the line until they land, and they can be added to the relevant workflow independently:
+The following are the north-star quality gates; the expand-only discipline (above) holds the line until they land, and they can be added to the relevant workflow independently:
 
 - Generated-artifact **drift checks** — `export-swagger.sh` / `db-codegen.sh` (backend) and `generate-types` (web) produce no diff against the committed output.
 - **Ephemeral-Postgres migration tests** — new goose migrations apply cleanly (and down-migrations exist) against a throwaway Postgres in CI.
