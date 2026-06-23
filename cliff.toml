@@ -9,7 +9,6 @@
 # followed by the download/install footer.
 
 [changelog]
-header = ""
 body = """
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | upper_first }}
@@ -22,6 +21,7 @@ footer = """
 ---
 See the assets below to download and install. Installed copies update themselves automatically.
 """
+header = ""
 trim = true
 
 [git]
@@ -33,19 +33,19 @@ filter_unconventional = false
 # Group by type, in this display order. Noise types (and the "chore: release"
 # bump commit) are skipped so the notes read like a user-facing changelog.
 commit_parsers = [
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Bug Fixes" },
-  { message = "^perf", group = "Performance" },
-  { message = "^refactor", group = "Refactors" },
-  { message = "^docs", group = "Documentation" },
-  { message = "^chore", skip = true },
-  { message = "^ci", skip = true },
-  { message = "^build", skip = true },
-  { message = "^style", skip = true },
-  { message = "^test", skip = true },
-  { message = ".*", group = "Other" },
+  {message = "^feat", group = "Features"},
+  {message = "^fix", group = "Bug Fixes"},
+  {message = "^perf", group = "Performance"},
+  {message = "^refactor", skip = true},
+  {message = "^docs", skip = true},
+  {message = "^chore", skip = true},
+  {message = "^ci", skip = true},
+  {message = "^build", skip = true},
+  {message = "^style", skip = true},
+  {message = "^test", skip = true},
+  {message = ".*", group = "Other"},
 ]
 filter_commits = false
 # Only real version tags delimit releases.
-tag_pattern = "v[0-9]*"
 sort_commits = "oldest"
+tag_pattern = "v[0-9]*"
