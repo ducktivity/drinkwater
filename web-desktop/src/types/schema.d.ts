@@ -4,533 +4,533 @@
  */
 
 export interface paths {
-  '/auth/me': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /**
-     * Get the current user
-     * @description Returns the account for the supplied bearer token. Used by clients to validate a stored token on startup.
-     */
-    get: {
-      parameters: {
-        query?: never
-        header?: never
-        path?: never
-        cookie?: never
-      }
-      requestBody?: never
-      responses: {
-        /** @description The authenticated user */
-        200: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': components['schemas']['api.User']
-          }
-        }
-        /** @description Missing or invalid token */
-        401: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-        /** @description Internal server or database error */
-        500: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-      }
-    }
-    put?: never
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/auth/request': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    get?: never
-    put?: never
-    /**
-     * Request a login code
-     * @description Sends a 6-digit login code to the given email, creating the account if it does not yet exist. Always returns a generic acknowledgement so the endpoint cannot be used to probe which emails have accounts.
-     */
-    post: {
-      parameters: {
-        query?: never
-        header?: never
-        path?: never
-        cookie?: never
-      }
-      /** @description Email to send the login code to */
-      requestBody: {
-        content: {
-          'application/json': components['schemas']['api.AuthRequestInput']
-        }
-      }
-      responses: {
-        /** @description Generic acknowledgement */
-        200: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': components['schemas']['api.MessageResponse']
-          }
-        }
-        /** @description Invalid request body or email */
-        400: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-        /** @description A code was requested too recently */
-        429: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-        /** @description Internal server or database error */
-        500: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-      }
-    }
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/auth/verify': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    get?: never
-    put?: never
-    /**
-     * Verify a login code
-     * @description Exchanges a valid email + 6-digit code for a 30-day session token. Wrong guesses are capped per code; a successful verification consumes the code so it cannot be reused.
-     */
-    post: {
-      parameters: {
-        query?: never
-        header?: never
-        path?: never
-        cookie?: never
-      }
-      /** @description Email and the 6-digit code */
-      requestBody: {
-        content: {
-          'application/json': components['schemas']['api.AuthVerifyInput']
-        }
-      }
-      responses: {
-        /** @description Session token and the authenticated user */
-        200: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': components['schemas']['api.AuthResponse']
-          }
-        }
-        /** @description Invalid request body or email */
-        400: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-        /** @description Code is wrong, expired, used up, or locked */
-        401: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-        /** @description Internal server or database error */
-        500: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-      }
-    }
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/logs': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /**
-     * Fetch water logs for a specific day
-     * @description Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are no longer cached locally.
-     */
-    get: {
-      parameters: {
-        query: {
-          /** @description ISO-8601 timestamp marking the inclusive start of the range */
-          from: string
-          /** @description ISO-8601 timestamp marking the exclusive end of the range */
-          to: string
-        }
-        header?: never
-        path?: never
-        cookie?: never
-      }
-      requestBody?: never
-      responses: {
-        /** @description Logs within the requested range, most recent first */
-        200: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': components['schemas']['api.LogsResponse']
-          }
-        }
-        /** @description Missing or invalid range parameters */
-        400: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-        /** @description Internal server or database error */
-        500: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-      }
-    }
-    put?: never
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/settings': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /**
-     * Get the current user's UI settings
-     * @description Returns the user's saved UI settings document (bottle size, daily goal, schedule, reminder). Responds 404 when the account has no settings yet, so the client keeps its local fallback values.
-     */
-    get: {
-      parameters: {
-        query?: never
-        header?: never
-        path?: never
-        cookie?: never
-      }
-      requestBody?: never
-      responses: {
-        /** @description The user's saved settings document */
-        200: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': components['schemas']['api.UserSettings']
-          }
-        }
-        /** @description Missing or invalid token */
-        401: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-        /** @description No settings saved for this user yet */
-        404: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-        /** @description Internal server or database error */
-        500: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-      }
-    }
-    /**
-     * Save the current user's UI settings
-     * @description Upserts the user's UI settings document (stored verbatim as JSON). Creates the row on first save.
-     */
-    put: {
-      parameters: {
-        query?: never
-        header?: never
-        path?: never
-        cookie?: never
-      }
-      /** @description The settings document to save */
-      requestBody: {
-        content: {
-          'application/json': components['schemas']['api.UserSettings']
-        }
-      }
-      responses: {
-        /** @description The saved settings document */
-        200: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': components['schemas']['api.UserSettings']
-          }
-        }
-        /** @description Invalid request body */
-        400: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-        /** @description Missing or invalid token */
-        401: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-        /** @description Internal server or database error */
-        500: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-      }
-    }
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/sync': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    get?: never
-    put?: never
-    /**
-     * Sync local water logs with the server
-     * @description Pushes local changes (upserts) to the server and pulls remote changes (delta) made on other devices.
-     */
-    post: {
-      parameters: {
-        query?: {
-          /** @description ISO-8601 Timestamp of the client's last sync */
-          since?: string
-        }
-        header?: never
-        path?: never
-        cookie?: never
-      }
-      /** @description Array of local water logs to sync */
-      requestBody: {
-        content: {
-          'application/json': components['schemas']['api.WaterLog'][]
-        }
-      }
-      responses: {
-        /** @description Successful sync response containing delta changes */
-        200: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': components['schemas']['api.SyncResponse']
-          }
-        }
-        /** @description Invalid request body */
-        400: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-        /** @description Internal server or database error */
-        500: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': {
-              [key: string]: string
-            }
-          }
-        }
-      }
-    }
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
+    "/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the current user
+         * @description Returns the account for the supplied bearer token. Used by clients to validate a stored token on startup.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The authenticated user */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["api.User"];
+                    };
+                };
+                /** @description Missing or invalid token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Internal server or database error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a login code
+         * @description Sends a 6-digit login code to the given email, creating the account if it does not yet exist. Always returns a generic acknowledgement so the endpoint cannot be used to probe which emails have accounts.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Email to send the login code to */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["api.AuthRequestInput"];
+                };
+            };
+            responses: {
+                /** @description Generic acknowledgement */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["api.MessageResponse"];
+                    };
+                };
+                /** @description Invalid request body or email */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description A code was requested too recently */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Internal server or database error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify a login code
+         * @description Exchanges a valid email + 6-digit code for a 30-day session token. Wrong guesses are capped per code; a successful verification consumes the code so it cannot be reused.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Email and the 6-digit code */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["api.AuthVerifyInput"];
+                };
+            };
+            responses: {
+                /** @description Session token and the authenticated user */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["api.AuthResponse"];
+                    };
+                };
+                /** @description Invalid request body or email */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Code is wrong, expired, used up, or locked */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Internal server or database error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fetch water logs for a specific day
+         * @description Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are no longer cached locally.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description ISO-8601 timestamp marking the inclusive start of the range */
+                    from: string;
+                    /** @description ISO-8601 timestamp marking the exclusive end of the range */
+                    to: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Logs within the requested range, most recent first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["api.LogsResponse"];
+                    };
+                };
+                /** @description Missing or invalid range parameters */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Internal server or database error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the current user's UI settings
+         * @description Returns the user's saved UI settings document (bottle size, daily goal, schedule, reminder). Responds 404 when the account has no settings yet, so the client keeps its local fallback values.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The user's saved settings document */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["api.UserSettings"];
+                    };
+                };
+                /** @description Missing or invalid token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description No settings saved for this user yet */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Internal server or database error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        /**
+         * Save the current user's UI settings
+         * @description Upserts the user's UI settings document (stored verbatim as JSON). Creates the row on first save.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description The settings document to save */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["api.UserSettings"];
+                };
+            };
+            responses: {
+                /** @description The saved settings document */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["api.UserSettings"];
+                    };
+                };
+                /** @description Invalid request body */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Missing or invalid token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Internal server or database error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync local water logs with the server
+         * @description Pushes local changes (upserts) to the server and pulls remote changes (delta) made on other devices.
+         */
+        post: {
+            parameters: {
+                query?: {
+                    /** @description ISO-8601 Timestamp of the client's last sync */
+                    since?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Array of local water logs to sync */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["api.WaterLog"][];
+                };
+            };
+            responses: {
+                /** @description Successful sync response containing delta changes */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["api.SyncResponse"];
+                    };
+                };
+                /** @description Invalid request body */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Internal server or database error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
-export type webhooks = Record<string, never>
+export type webhooks = Record<string, never>;
 export interface components {
-  schemas: {
-    'api.AuthRequestInput': {
-      email: string
-    }
-    'api.AuthResponse': {
-      token: string
-      user: components['schemas']['api.User']
-    }
-    'api.AuthVerifyInput': {
-      code: string
-      email: string
-    }
-    'api.LogsResponse': {
-      logs: components['schemas']['api.WaterLog'][]
-    }
-    'api.MessageResponse': {
-      message: string
-    }
-    'api.SyncResponse': {
-      changes: components['schemas']['api.WaterLog'][]
-      server_time: string
-    }
-    'api.User': {
-      email: string
-      id: string
-    }
-    'api.UserSettings': {
-      settings: Record<string, never>
-    }
-    'api.WaterLog': {
-      amount_ml: number
-      id: string
-      is_deleted: boolean
-      logged_at: string
-    }
-  }
-  responses: never
-  parameters: never
-  requestBodies: never
-  headers: never
-  pathItems: never
+    schemas: {
+        "api.AuthRequestInput": {
+            email: string;
+        };
+        "api.AuthResponse": {
+            token: string;
+            user: components["schemas"]["api.User"];
+        };
+        "api.AuthVerifyInput": {
+            code: string;
+            email: string;
+        };
+        "api.LogsResponse": {
+            logs: components["schemas"]["api.WaterLog"][];
+        };
+        "api.MessageResponse": {
+            message: string;
+        };
+        "api.SyncResponse": {
+            changes: components["schemas"]["api.WaterLog"][];
+            server_time: string;
+        };
+        "api.User": {
+            email: string;
+            id: string;
+        };
+        "api.UserSettings": {
+            settings: Record<string, never>;
+        };
+        "api.WaterLog": {
+            amount_ml: number;
+            id: string;
+            is_deleted: boolean;
+            logged_at: string;
+        };
+    };
+    responses: never;
+    parameters: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
-export type $defs = Record<string, never>
-export type operations = Record<string, never>
+export type $defs = Record<string, never>;
+export type operations = Record<string, never>;
