@@ -115,8 +115,3 @@ export function formatMl(milliliters: number) {
 export function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
 }
-
-/** CI smoke test — deliberate type error to verify Web CI fails. Revert after. */
-export function ciSmokeTest(): number {
-  return 'not a number'
-}
