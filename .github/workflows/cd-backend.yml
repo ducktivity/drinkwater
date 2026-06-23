@@ -32,9 +32,7 @@ jobs:
         id: filter
         with:
           filters: |
-            backend:
-              - 'backend/**'
-              - 'shared-schemas/**'
+            backend: 'backend/**'
 
   # Verification gate, extracted into a reusable workflow so the exact same gates
   # also guard the tagged Desktop Release (see _backend-check.yml). The image is
