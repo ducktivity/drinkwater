@@ -19,5 +19,5 @@ permissions:
 
 jobs:
   check:
-    name: Rust fmt + clippy
+    name: Verify desktop
     uses: ./.github/workflows/_desktop-check.yml

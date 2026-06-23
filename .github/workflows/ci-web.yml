@@ -13,5 +13,5 @@ permissions:
 
 jobs:
   check:
-    name: TypeScript & build
+    name: Verify web
     uses: ./.github/workflows/_web-check.yml
