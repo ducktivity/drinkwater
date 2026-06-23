@@ -1,593 +1,632 @@
 {
-  "openapi": "3.0.0",
-  "info": {
-    "description": "Local-first sync engine.",
-    "title": "Drinkwater Sync API",
-    "contact": {},
-    "version": "1.0"
-  },
-  "paths": {
-    "/auth/me": {
-      "get": {
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "description": "Returns the account for the supplied bearer token. Used by clients to validate a stored token on startup.",
-        "tags": ["auth"],
-        "summary": "Get the current user",
-        "responses": {
-          "200": {
-            "description": "The authenticated user",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/api.User"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server or database error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+    "openapi": "3.0.0",
+    "info": {
+        "description": "Local-first sync engine.",
+        "title": "Drinkwater Sync API",
+        "contact": {},
+        "version": "1.0"
     },
-    "/auth/request": {
-      "post": {
-        "description": "Sends a 6-digit login code to the given email, creating the account if it does not yet exist. Always returns a generic acknowledgement so the endpoint cannot be used to probe which emails have accounts.",
-        "tags": ["auth"],
-        "summary": "Request a login code",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/api.AuthRequestInput"
-              }
+    "paths": {
+        "/auth/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the account for the supplied bearer token. Used by clients to validate a stored token on startup.",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Get the current user",
+                "responses": {
+                    "200": {
+                        "description": "The authenticated user",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/api.User"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server or database error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-          },
-          "description": "Email to send the login code to",
-          "required": true
         },
-        "responses": {
-          "200": {
-            "description": "Generic acknowledgement",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/api.MessageResponse"
+        "/auth/request": {
+            "post": {
+                "description": "Sends a 6-digit login code to the given email, creating the account if it does not yet exist. Always returns a generic acknowledgement so the endpoint cannot be used to probe which emails have accounts.",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Request a login code",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/api.AuthRequestInput"
+                            }
+                        }
+                    },
+                    "description": "Email to send the login code to",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Generic acknowledgement",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/api.MessageResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or email",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "A code was requested too recently",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server or database error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-              }
             }
-          },
-          "400": {
-            "description": "Invalid request body or email",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "A code was requested too recently",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server or database error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/verify": {
-      "post": {
-        "description": "Exchanges a valid email + 6-digit code for a 30-day session token. Wrong guesses are capped per code; a successful verification consumes the code so it cannot be reused.",
-        "tags": ["auth"],
-        "summary": "Verify a login code",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/api.AuthVerifyInput"
-              }
-            }
-          },
-          "description": "Email and the 6-digit code",
-          "required": true
         },
-        "responses": {
-          "200": {
-            "description": "Session token and the authenticated user",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/api.AuthResponse"
+        "/auth/verify": {
+            "post": {
+                "description": "Exchanges a valid email + 6-digit code for a 30-day session token. Wrong guesses are capped per code; a successful verification consumes the code so it cannot be reused.",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Verify a login code",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/api.AuthVerifyInput"
+                            }
+                        }
+                    },
+                    "description": "Email and the 6-digit code",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Session token and the authenticated user",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/api.AuthResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or email",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Code is wrong, expired, used up, or locked",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server or database error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-              }
             }
-          },
-          "400": {
-            "description": "Invalid request body or email",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Code is wrong, expired, used up, or locked",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server or database error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/logs": {
-      "get": {
-        "description": "Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are no longer cached locally.",
-        "tags": ["logs"],
-        "summary": "Fetch water logs for a specific day",
-        "parameters": [
-          {
-            "description": "ISO-8601 timestamp marking the inclusive start of the range",
-            "name": "from",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "ISO-8601 timestamp marking the exclusive end of the range",
-            "name": "to",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Logs within the requested range, most recent first",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/api.LogsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing or invalid range parameters",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server or database error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/settings": {
-      "get": {
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "description": "Returns the user's saved UI settings document (bottle size, daily goal, schedule, reminder). Responds 404 when the account has no settings yet, so the client keeps its local fallback values.",
-        "tags": ["settings"],
-        "summary": "Get the current user's UI settings",
-        "responses": {
-          "200": {
-            "description": "The user's saved settings document",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/api.UserSettings"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No settings saved for this user yet",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server or database error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "description": "Upserts the user's UI settings document (stored verbatim as JSON). Creates the row on first save.",
-        "tags": ["settings"],
-        "summary": "Save the current user's UI settings",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/api.UserSettings"
-              }
-            }
-          },
-          "description": "The settings document to save",
-          "required": true
         },
-        "responses": {
-          "200": {
-            "description": "The saved settings document",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/api.UserSettings"
+        "/logs": {
+            "get": {
+                "description": "Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are no longer cached locally.",
+                "tags": [
+                    "logs"
+                ],
+                "summary": "Fetch water logs for a specific day",
+                "parameters": [
+                    {
+                        "description": "ISO-8601 timestamp marking the inclusive start of the range",
+                        "name": "from",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "ISO-8601 timestamp marking the exclusive end of the range",
+                        "name": "to",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Logs within the requested range, most recent first",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/api.LogsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Missing or invalid range parameters",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server or database error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-              }
             }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server or database error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/sync": {
-      "post": {
-        "description": "Pushes local changes (upserts) to the server and pulls remote changes (delta) made on other devices.",
-        "tags": ["sync"],
-        "summary": "Sync local water logs with the server",
-        "parameters": [
-          {
-            "description": "ISO-8601 Timestamp of the client's last sync",
-            "name": "since",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/api.WaterLog"
-                }
-              }
-            }
-          },
-          "description": "Array of local water logs to sync",
-          "required": true
         },
-        "responses": {
-          "200": {
-            "description": "Successful sync response containing delta changes",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/api.SyncResponse"
+        "/settings": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the user's saved UI settings document (bottle size, daily goal, schedule, reminder). Responds 404 when the account has no settings yet, so the client keeps its local fallback values.",
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Get the current user's UI settings",
+                "responses": {
+                    "200": {
+                        "description": "The user's saved settings document",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/api.UserSettings"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "No settings saved for this user yet",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server or database error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upserts the user's UI settings document (stored verbatim as JSON). Creates the row on first save.",
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Save the current user's UI settings",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/api.UserSettings"
+                            }
+                        }
+                    },
+                    "description": "The settings document to save",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "The saved settings document",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/api.UserSettings"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server or database error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-              }
             }
-          },
-          "500": {
-            "description": "Internal server or database error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
+        },
+        "/sync": {
+            "post": {
+                "description": "Pushes local changes (upserts) to the server and pulls remote changes (delta) made on other devices.",
+                "tags": [
+                    "sync"
+                ],
+                "summary": "Sync local water logs with the server",
+                "parameters": [
+                    {
+                        "description": "ISO-8601 Timestamp of the client's last sync",
+                        "name": "since",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/api.WaterLog"
+                                }
+                            }
+                        }
+                    },
+                    "description": "Array of local water logs to sync",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful sync response containing delta changes",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/api.SyncResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server or database error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-              }
             }
-          }
         }
-      }
+    },
+    "servers": [
+        {
+            "url": "/"
+        }
+    ],
+    "components": {
+        "securitySchemes": {
+            "BearerAuth": {
+                "description": "Type \"Bearer\" followed by a space and the session token returned by /auth/verify.",
+                "type": "apiKey",
+                "name": "Authorization",
+                "in": "header"
+            }
+        },
+        "schemas": {
+            "api.AuthRequestInput": {
+                "type": "object",
+                "required": [
+                    "email"
+                ],
+                "properties": {
+                    "email": {
+                        "type": "string"
+                    }
+                }
+            },
+            "api.AuthResponse": {
+                "type": "object",
+                "required": [
+                    "token",
+                    "user"
+                ],
+                "properties": {
+                    "token": {
+                        "type": "string"
+                    },
+                    "user": {
+                        "$ref": "#/components/schemas/api.User"
+                    }
+                }
+            },
+            "api.AuthVerifyInput": {
+                "type": "object",
+                "required": [
+                    "code",
+                    "email"
+                ],
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
+                    }
+                }
+            },
+            "api.LogsResponse": {
+                "type": "object",
+                "required": [
+                    "logs"
+                ],
+                "properties": {
+                    "logs": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/api.WaterLog"
+                        }
+                    }
+                }
+            },
+            "api.MessageResponse": {
+                "type": "object",
+                "required": [
+                    "message"
+                ],
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    }
+                }
+            },
+            "api.SyncResponse": {
+                "type": "object",
+                "required": [
+                    "changes",
+                    "server_time"
+                ],
+                "properties": {
+                    "changes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/api.WaterLog"
+                        }
+                    },
+                    "server_time": {
+                        "type": "string"
+                    }
+                }
+            },
+            "api.User": {
+                "type": "object",
+                "required": [
+                    "email",
+                    "id"
+                ],
+                "properties": {
+                    "email": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    }
+                }
+            },
+            "api.UserSettings": {
+                "type": "object",
+                "required": [
+                    "settings"
+                ],
+                "properties": {
+                    "settings": {
+                        "type": "object"
+                    }
+                }
+            },
+            "api.WaterLog": {
+                "type": "object",
+                "required": [
+                    "amount_ml",
+                    "id",
+                    "is_deleted",
+                    "logged_at"
+                ],
+                "properties": {
+                    "amount_ml": {
+                        "type": "integer"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "is_deleted": {
+                        "type": "boolean"
+                    },
+                    "logged_at": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
     }
-  },
-  "servers": [
-    {
-      "url": "/"
-    }
-  ],
-  "components": {
-    "securitySchemes": {
-      "BearerAuth": {
-        "description": "Type \"Bearer\" followed by a space and the session token returned by /auth/verify.",
-        "type": "apiKey",
-        "name": "Authorization",
-        "in": "header"
-      }
-    },
-    "schemas": {
-      "api.AuthRequestInput": {
-        "type": "object",
-        "required": ["email"],
-        "properties": {
-          "email": {
-            "type": "string"
-          }
-        }
-      },
-      "api.AuthResponse": {
-        "type": "object",
-        "required": ["token", "user"],
-        "properties": {
-          "token": {
-            "type": "string"
-          },
-          "user": {
-            "$ref": "#/components/schemas/api.User"
-          }
-        }
-      },
-      "api.AuthVerifyInput": {
-        "type": "object",
-        "required": ["code", "email"],
-        "properties": {
-          "code": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          }
-        }
-      },
-      "api.LogsResponse": {
-        "type": "object",
-        "required": ["logs"],
-        "properties": {
-          "logs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/api.WaterLog"
-            }
-          }
-        }
-      },
-      "api.MessageResponse": {
-        "type": "object",
-        "required": ["message"],
-        "properties": {
-          "message": {
-            "type": "string"
-          }
-        }
-      },
-      "api.SyncResponse": {
-        "type": "object",
-        "required": ["changes", "server_time"],
-        "properties": {
-          "changes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/api.WaterLog"
-            }
-          },
-          "server_time": {
-            "type": "string"
-          }
-        }
-      },
-      "api.User": {
-        "type": "object",
-        "required": ["email", "id"],
-        "properties": {
-          "email": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          }
-        }
-      },
-      "api.UserSettings": {
-        "type": "object",
-        "required": ["settings"],
-        "properties": {
-          "settings": {
-            "type": "object"
-          }
-        }
-      },
-      "api.WaterLog": {
-        "type": "object",
-        "required": ["amount_ml", "id", "is_deleted", "logged_at"],
-        "properties": {
-          "amount_ml": {
-            "type": "integer"
-          },
-          "id": {
-            "type": "string"
-          },
-          "is_deleted": {
-            "type": "boolean"
-          },
-          "logged_at": {
-            "type": "string"
-          }
-        }
-      }
-    }
-  }
 }

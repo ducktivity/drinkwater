@@ -1,0 +1,16 @@
+# Repo-root Prettier ignore.
+#
+# pretty-quick (run via web-desktop's `pnpm run check`) detects the *git root*
+# and reports changed files relative to it, then filters them through the
+# .prettierignore found here at the root. So generated artifacts must be listed
+# with repo-root-relative paths — web-desktop/.prettierignore's own-dir-relative
+# patterns (e.g. `src/types/...`, `../shared-schemas/...`) do NOT match the
+# root-relative paths pretty-quick produces, and would let these slip through.
+
+# Generated artifacts (DO NOT EDIT) — owned by their generators:
+#   - swagger.json: backend `./scripts/export-swagger.sh` (swag)
+#   - openapi.json + schema.d.ts: web-desktop `pnpm run generate-types`
+shared-schemas/swagger.json
+shared-schemas/openapi.json
+web-desktop/src/types/schema.d.ts
+pnpm-lock.yaml
