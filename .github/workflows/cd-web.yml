@@ -2,9 +2,16 @@ name: Web Deploy
 
 # Builds the SolidJS web app and deploys to Cloudflare Pages via Wrangler.
 #
-# Dependency chain (docs/architecture.md §7: frontend deploys AFTER backend):
-#   - Triggered by workflow_run AFTER Backend CD succeeds on main. Deploys the
-#     exact commit that passed Backend CD, so the SPA always meets a verified API.
+# Release-gated, mirroring cd-desktop.yml so web and desktop publish together off
+# the same backend-verified commit whenever a release is cut:
+#   - Triggered by workflow_run AFTER Backend CD succeeds on main, so the SPA
+#     always deploys a commit that passed a verified API build.
+#   - The `decide` job reads the version from web-desktop/package.json. If that
+#     version has no git tag yet, this commit cuts a new release and we deploy;
+#     if the version is already tagged, every job is skipped and the run finishes
+#     green (Cloudflare keeps serving the last deployment).
+#   - Bump the version with `pnpm run release <version>`, commit, and merge to
+#     publish web + desktop together.
 #   - PRs are validated by ci-web.yml before merge (branch protection).
 
 on:
@@ -17,45 +24,50 @@ permissions:
   contents: read
 
 jobs:
-  # Web Deploy is chained off Backend CD (workflow_run), so it fires for every
-  # green Backend CD run — including pushes that changed only the backend. Detect
-  # whether the web app actually changed in the commit Backend CD verified and
-  # skip the build + deploy when it did not (Cloudflare keeps serving the last
-  # deployment). A workflow_run event carries no before-SHA the way a push does,
-  # so we diff the verified commit against its first parent.
-  changes:
-    name: Detect web changes
+  # Deploy only when a new release is cut. Web Deploy fires for every green
+  # Backend CD run (i.e. every push to main), so we gate on the version in
+  # web-desktop/package.json: deploy only when that version has no tag yet, which
+  # is exactly the commit where the release is cut. This matches cd-desktop.yml's
+  # `decide` job so web and desktop ship the same version together. Gating on the
+  # version tag (rather than a path diff) also sidesteps the fact that a
+  # workflow_run event carries no before-SHA to diff a push range against.
+  decide:
+    name: Decide whether to deploy
     runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'success'
     outputs:
-      web: ${{ steps.filter.outputs.web }}
+      release: ${{ steps.d.outputs.release }}
     steps:
       - uses: actions/checkout@v4
         with:
+          # Full history + tags so the version-tag existence check is reliable.
+          # Pin to the exact commit Backend CD verified.
+          fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 2 # need the parent commit to diff against
-      - name: Detect changes under web-desktop/ or shared-schemas/
-        id: filter
+      - name: Decide whether this commit cuts a new release
+        id: d
         run: |
-          changed=$(git diff --name-only HEAD^ HEAD)
-          if echo "$changed" | grep -qE '^(web-desktop/|shared-schemas/)'; then
-            echo "web=true" >> "$GITHUB_OUTPUT"
+          version=$(node -p "require('./web-desktop/package.json').version")
+          tag="v$version"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag already released — skipping web deploy."
+            echo "release=false" >> "$GITHUB_OUTPUT"
           else
-            echo "web=false" >> "$GITHUB_OUTPUT"
-            echo "No web changes in this commit — skipping deploy."
+            echo "$version is new — will deploy web for $tag."
+            echo "release=true" >> "$GITHUB_OUTPUT"
           fi
 
   check:
     name: Verify web before deploy
-    needs: changes
-    if: needs.changes.outputs.web == 'true'
+    needs: decide
+    if: needs.decide.outputs.release == 'true'
     uses: ./.github/workflows/_web-check.yml
 
   deploy:
     name: Build & deploy web to Cloudflare Pages
-    needs: [changes, check]
+    needs: [decide, check]
     runs-on: ubuntu-latest
-    if: needs.changes.outputs.web == 'true'
+    if: needs.decide.outputs.release == 'true'
     defaults:
       run:
         working-directory: web-desktop
