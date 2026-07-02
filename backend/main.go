@@ -16,7 +16,6 @@ import (
 
 	"drinkwater-backend/auth"
 	"drinkwater-backend/database"
-	"drinkwater-backend/email"
 	"drinkwater-backend/handlers"
 
 	"github.com/getsentry/sentry-go"
@@ -42,14 +41,13 @@ var (
 
 // config holds the runtime configuration sourced from environment variables.
 type config struct {
-	env          string     // ENV: prod | staging | development; tags every log + Sentry event
-	port         string     // PORT: TCP port to listen on
-	logLevel     slog.Level // LOG_LEVEL: debug | info | warn | error
-	logJSON      bool       // LOG_FORMAT: "json" (prod) or "text" (local dev pretty output)
-	sentryDSN    string     // SENTRY_DSN: empty disables Sentry (no-op) for local dev
-	authSecret   string     // AUTH_JWT_SECRET: signs session JWTs and peppers login codes
-	resendAPIKey string     // RESEND_API_KEY: empty logs login codes instead of emailing (dev)
-	emailFrom    string     // AUTH_EMAIL_FROM: From header for login emails, e.g. "Drinkwater <login@example.com>"
+	env        string     // ENV: prod | staging | development; tags every log + Sentry event
+	port       string     // PORT: TCP port to listen on
+	logLevel   slog.Level // LOG_LEVEL: debug | info | warn | error
+	logJSON    bool       // LOG_FORMAT: "json" (prod) or "text" (local dev pretty output)
+	sentryDSN  string     // SENTRY_DSN: empty disables Sentry (no-op) for local dev
+	jwksURL    string     // JWKS_URL: identity service public keys, e.g. https://id.ducktvt.com/.well-known/jwks.json
+	authIssuer string     // AUTH_ISSUER: expected "iss" claim, e.g. https://id.ducktvt.com
 }
 
 func loadConfig() config {
@@ -62,14 +60,13 @@ func loadConfig() config {
 		defaultLogFormat = "text"
 	}
 	return config{
-		env:          env,
-		port:         getenv("PORT", "8080"),
-		logLevel:     httplog.LevelByName(getenv("LOG_LEVEL", "info")),
-		logJSON:      getenv("LOG_FORMAT", defaultLogFormat) == "json",
-		sentryDSN:    os.Getenv("SENTRY_DSN"),
-		authSecret:   os.Getenv("AUTH_JWT_SECRET"),
-		resendAPIKey: os.Getenv("RESEND_API_KEY"),
-		emailFrom:    getenv("AUTH_EMAIL_FROM", "Drinkwater <onboarding@resend.dev>"),
+		env:        env,
+		port:       getenv("PORT", "8080"),
+		logLevel:   httplog.LevelByName(getenv("LOG_LEVEL", "info")),
+		logJSON:    getenv("LOG_FORMAT", defaultLogFormat) == "json",
+		sentryDSN:  os.Getenv("SENTRY_DSN"),
+		jwksURL:    getenv("JWKS_URL", "http://localhost:8000/.well-known/jwks.json"),
+		authIssuer: getenv("AUTH_ISSUER", "http://localhost:8000"),
 	}
 }
 
@@ -87,7 +84,7 @@ func getenv(key, fallback string) string {
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization
-// @description Type "Bearer" followed by a space and the session token returned by /auth/verify.
+// @description Type "Bearer" followed by a space and the session token issued by the identity service (id.ducktvt.com, POST /v1/auth/verify).
 func main() {
 	resolveBuildInfo()
 
@@ -127,22 +124,16 @@ func main() {
 	}
 	slog.SetDefault(logger.Logger)
 
-	// Configure authentication. The secret signs session JWTs and peppers login
-	// codes, so it must be present outside local dev; fail fast rather than boot
-	// an instance that can mint forgeable tokens.
-	if cfg.authSecret == "" {
-		if cfg.env != "development" {
-			slog.Error("AUTH_JWT_SECRET is required outside development")
-			os.Exit(1)
-		}
-		slog.Warn("AUTH_JWT_SECRET is empty; using an insecure development default")
-		cfg.authSecret = "dev-insecure-secret-do-not-use-in-prod"
+	// Configure authentication. Drinkwater no longer signs tokens; the central
+	// identity service is the sole issuer. We fetch its public keys (JWKS) and
+	// verify incoming EdDSA tokens against them. Fail fast if the JWKS is
+	// unreachable at startup so we never boot an instance that cannot authenticate.
+	authCtx, authCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := auth.Init(authCtx, cfg.jwksURL, cfg.authIssuer); err != nil {
+		slog.Error("failed to initialise token verification", "error", err, "jwks_url", cfg.jwksURL)
+		os.Exit(1)
 	}
-	auth.SetSecret(cfg.authSecret)
-
-	// Wire the login-code email sender. With no RESEND_API_KEY (local dev) it logs
-	// codes instead of sending them.
-	handlers.EmailSender = email.NewSender(cfg.resendAPIKey, cfg.emailFrom)
+	authCancel()
 
 	database.Connect()
 
@@ -234,9 +225,10 @@ func main() {
 	router.Get("/readyz", handlers.Readyz)
 	router.Get("/health", handlers.Healthz) // legacy alias
 
-	// Public auth endpoints: request a login code and exchange it for a token.
-	router.Post("/auth/request", handlers.PostAuthRequest)
-	router.Post("/auth/verify", handlers.PostAuthVerify)
+	// Login (requesting and verifying a code) now lives in the central identity
+	// service, not here — Drinkwater only verifies the tokens it issues. So there
+	// are no public /auth/* endpoints anymore; the client points its login flow at
+	// the identity service and sends the resulting bearer token to the routes below.
 
 	// Everything that touches a user's data sits behind RequireAuth, which rejects
 	// requests without a valid bearer token and injects the user id downstream.

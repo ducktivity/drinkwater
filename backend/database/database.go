@@ -29,7 +29,7 @@ func Connect() {
 	if connStr == "" {
 		// Default fallback for running a local Postgres container. These are
 		// throwaway localhost dev credentials, not a real secret.
-		connStr = "postgres://postgres:postgres@localhost:5432/drinkwater?sslmode=disable" // #nosec G101 -- local-dev fallback, no real credential
+		connStr = "postgres://postgres:postgres@localhost:5432/ducktivity?sslmode=disable&options=-c%20search_path%3Ddrinkwater" // #nosec G101 -- local-dev fallback, no real credential
 	}
 
 	config, err := pgxpool.ParseConfig(connStr)

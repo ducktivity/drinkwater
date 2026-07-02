@@ -32,7 +32,7 @@ export class RequestError extends Error {
 // The API base URL is injected at build time via VITE_API_BASE_URL. Production
 // builds (Cloudflare Pages) set it to the backend's Cloudflare hostname; local
 // dev falls back to the Go Chi server on localhost.
-const baseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
+const baseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8001'
 
 export const apiClient = createClient<paths>({
   baseUrl,

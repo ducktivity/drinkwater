@@ -1,4 +1,5 @@
 import { apiClient } from './api'
+import { identityClient } from './identity'
 import { setToken } from './token'
 
 /**
@@ -15,12 +16,12 @@ export interface AuthUser {
 }
 
 /**
- * Asks the backend to email a 6-digit login code to `email`, creating the
- * account if it is new. Returns an error message on failure (e.g. rate-limited
- * or invalid email), or null on success.
+ * Asks the identity service to email a 6-digit login code to `email`, creating
+ * the account if it is new. Returns an error message on failure (e.g.
+ * rate-limited or invalid email), or null on success.
  */
 export async function requestCode(email: string): Promise<string | null> {
-  const { error } = await apiClient.POST('/auth/request', {
+  const { error } = await identityClient.POST('/v1/auth/request', {
     body: { email },
   })
   return error
@@ -29,14 +30,15 @@ export async function requestCode(email: string): Promise<string | null> {
 }
 
 /**
- * Exchanges an email + code for a session token, persisting it on success.
- * Returns the authenticated user, or an error message string on failure.
+ * Exchanges an email + code for a session token via the identity service,
+ * persisting it on success. Returns the authenticated user, or an error message
+ * string on failure.
  */
 export async function verifyCode(
   email: string,
   code: string,
 ): Promise<{ user: AuthUser } | { error: string }> {
-  const { data, error } = await apiClient.POST('/auth/verify', {
+  const { data, error } = await identityClient.POST('/v1/auth/verify', {
     body: { email, code },
   })
   if (error || !data) {
