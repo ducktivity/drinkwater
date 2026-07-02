@@ -28,6 +28,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /app
 COPY --from=build /out/drinkwater /app/drinkwater
-EXPOSE 8080
+EXPOSE 8001
 USER nonroot:nonroot
 ENTRYPOINT ["/app/drinkwater"]

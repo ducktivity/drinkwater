@@ -1,10 +1,10 @@
 name: Backend CD
 
-# Builds, checks, and (on main) publishes the backend image to GHCR.
-# This is the minimal "get it live" pipeline from docs/deployment.md Step 8 — it
-# does NOT yet include the full docs/architecture.md §7 machinery (generated-
-# artifact drift checks, ephemeral-Postgres migration tests, the :production
-# promotion gate, or the frontend build). Those layer on later.
+# On push to main (when backend/ changed): re-verify the commit, run the expand-only goose migration from the runner straight at Neon, then — only if it succeeds — build and push the image to GHCR. That is where CI stops.
+#
+# CI holds NO SSH access to the box and never flips the live service. Going live is a deliberate manual step: the operator runs deploy/remote-deploy.sh from their machine, which copies the compose file + reconcile script + .env to the box and runs deploy/reconcile-backend.sh there (pull -> up -> /readyz -> auto-rollback). Expand-only migrations mean the still-running old container keeps working against the new schema until that manual cutover.
+#
+# Web Deploy and Desktop Release no longer chain off this workflow — they fire on the same push to main and go live alongside the backend, not after it.
 
 on:
   push:
@@ -15,12 +15,10 @@ permissions:
   contents: read
 
 jobs:
-  # Detect whether anything affecting the backend image changed in this push.
-  # We deliberately do NOT use a top-level `on.push.paths` filter: that would
-  # stop Backend CD from running at all on a web-only push, and both Web Deploy
-  # and Desktop Release hang off this workflow's completion (workflow_run). So
-  # the workflow always starts; we just skip the expensive jobs below when the
-  # backend is untouched. On a push, paths-filter diffs against the prior commit.
+  # Detect whether anything affecting the backend image changed in this push. We
+  # diff against the prior commit rather than using a top-level `on.push.paths`
+  # filter, so this workflow always starts and stays green — we just skip the
+  # expensive migrate/image jobs below when the backend is untouched.
   changes:
     name: Detect backend changes
     runs-on: ubuntu-latest
@@ -44,11 +42,37 @@ jobs:
     if: needs.changes.outputs.backend == 'true'
     uses: ./.github/workflows/_backend-check.yml
 
+  # Migrations run here, against Neon, BEFORE the image is published. Expand-only,
+  # so the schema and the old container stay compatible until the manual box
+  # reconcile. Uses the production environment for DATABASE_URL_MIGRATOR; restrict
+  # that environment to main in repo settings.
+  migrate:
+    name: Apply migrations (goose -> Neon)
+    needs: [changes, check]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Apply migrations (goose -> Neon)
+        working-directory: backend
+        env:
+          DBSTRING: ${{ secrets.DATABASE_URL_MIGRATOR }}
+        run: go tool goose -dir sql/schema postgres "$DBSTRING" up
+
   image:
     name: Build & push image to GHCR
-    needs: [changes, check]
-    # Publish only when the backend actually changed and the gate passed. When
-    # the backend is unchanged, `latest` already points at the correct image, so
+    needs: [changes, check, migrate]
+    # Publish only after the gate passed AND the migration applied. When the
+    # backend is unchanged, `latest` already points at the correct image, so
     # there is nothing to release.
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest

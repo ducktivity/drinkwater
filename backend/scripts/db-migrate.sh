@@ -11,7 +11,7 @@ if [ -z "$COMMAND" ]; then
 fi
 
 # 2. Extract the DATABASE_URL from the .env file if it exists
-DB_URL="postgres://postgres:postgres@localhost:5432/drinkwater?sslmode=disable" # Default fallback
+DB_URL="postgres://postgres:postgres@localhost:5432/ducktivity?sslmode=disable&options=-c%20search_path%3Ddrinkwater" # Default fallback
 if [ -f .env ]; then
   # This clever line reads the .env file and extracts the DATABASE_URL specifically
   # Strip only up to the FIRST '=' so values that themselves contain '='
