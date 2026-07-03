@@ -1,0 +1,27 @@
+name: CI Prod
+
+# Validation gate for every PR into main. Fans out to the per-side reusable check workflows: Go backend, Tauri desktop Rust shell, and the SolidJS web app.
+#
+# - backend: go fmt, go vet, go build, go test, staticcheck, gosec.
+# - desktop: cargo fmt, cargo clippy (Rust side only; SolidJS is covered by the web job). Does NOT build the installer (that's cd-desktop.yml, on tags).
+# - web: typecheck, lint, build (validates the SPA compiles). Does NOT deploy (that's cd-web.yml, on push to main).
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Verify backend
+    uses: ./.github/workflows/_backend-check.yml
+
+  desktop:
+    name: Verify desktop
+    uses: ./.github/workflows/_desktop-check.yml
+
+  web:
+    name: Verify web
+    uses: ./.github/workflows/_web-check.yml

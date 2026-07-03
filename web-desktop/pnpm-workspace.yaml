@@ -1,0 +1,6 @@
+# Single-package project (no workspace members); this file exists so pnpm 10.7+ reads the dependency overrides below. `packages` is intentionally empty.
+packages: []
+
+# Force js-yaml off the vulnerable 4.1.1 that @redocly/openapi-core pins transitively. ^4.2.0 resolves to the patched 4.x latest, API-compatible.
+overrides:
+  js-yaml@4.1.1: ^4.2.0
