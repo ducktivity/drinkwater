@@ -1,6 +1,6 @@
 [package]
 name = "drinkwater"
-version = "0.3.1"
+version = "0.3.2"
 description = "Drinkwater desktop shell — hosts the shared SolidJS web build in a Tauri WebView2 window."
 authors = ["Ducktivity"]
 license = ""
