@@ -48,7 +48,7 @@
         },
         "/v1/logs": {
             "get": {
-                "description": "Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are no longer cached locally.",
+                "description": "Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are not cached locally.",
                 "tags": [
                     "logs"
                 ],
