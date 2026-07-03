@@ -56,6 +56,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Preflight: confirm the Cloudflare Pages API token still works before spending time on install + build. Otherwise wrangler-action fails at the very last step with an opaque auth error; hitting /user/tokens/verify here fails fast with an actionable message when the token is expired/revoked. Asserts HTTP 200, success:true, and result.status == "active" (a token can authenticate but be disabled/expired).
+      - name: Verify Cloudflare API token
+        env:
+          CLOUDFLARE_PAGES_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+        run: |
+          body="$RUNNER_TEMP/cf-token-verify.json"
+          code=$(curl -s -o "$body" -w '%{http_code}' \
+            -H "Authorization: Bearer $CLOUDFLARE_PAGES_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify)
+          success=$(jq -r '.success // false' "$body")
+          status=$(jq -r '.result.status // "unknown"' "$body")
+          if [ "$code" != "200" ] || [ "$success" != "true" ] || [ "$status" != "active" ]; then
+            echo "::error::Cloudflare API token verification failed (HTTP $code, status '$status'). CLOUDFLARE_PAGES_API_TOKEN may be expired or revoked — regenerate it in the Cloudflare dashboard and update the repo secret."
+            jq -c '.errors' "$body" 2>/dev/null || cat "$body"
+            exit 1
+          fi
+          echo "Cloudflare API token valid (status: $status)."
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
