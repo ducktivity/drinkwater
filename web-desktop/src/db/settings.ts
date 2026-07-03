@@ -34,7 +34,7 @@ export async function fetchSettings(): Promise<SyncableSettings | null> {
   }
 
   // An offline fetch rejects here and propagates to the caller untouched.
-  const { data, error, response } = await apiClient.GET('/settings')
+  const { data, error, response } = await apiClient.GET('/v1/settings')
 
   // Definitive "no settings yet" → signal the caller to seed from local.
   if (response.status === 404) return null
@@ -59,7 +59,7 @@ export async function pushSettings(settings: SyncableSettings): Promise<void> {
   if (!getToken()) return
 
   try {
-    const { error, response } = await apiClient.PUT('/settings', {
+    const { error, response } = await apiClient.PUT('/v1/settings', {
       // The settings document is opaque server-side; assert past the generated
       // empty-object type so we can send the real object.
       body: { settings: settings as unknown as Record<string, never> },

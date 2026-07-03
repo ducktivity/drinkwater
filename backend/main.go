@@ -206,7 +206,10 @@ func main() {
 
 	// Everything that touches a user's data sits behind RequireAuth, which rejects
 	// requests without a valid bearer token and injects the user id downstream.
-	router.Group(func(r chi.Router) {
+	// The client-facing API is versioned under /v1 (matching the identity service),
+	// so a future breaking change can ship as /v2 without disturbing old clients.
+	// Operational probes (/healthz, /readyz, /health) stay unversioned at the root.
+	router.Route("/v1", func(r chi.Router) {
 		r.Use(auth.RequireAuth)
 		r.Get("/auth/me", handlers.GetMe)
 		r.Post("/sync", handlers.PostSync)

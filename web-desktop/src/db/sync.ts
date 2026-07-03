@@ -52,7 +52,7 @@ export const syncEngine = async (): Promise<SyncResult> => {
     }))
 
     // 3. Make the type-safe API call to our Go backend
-    const { data, error, response } = await apiClient.POST('/sync', {
+    const { data, error, response } = await apiClient.POST('/v1/sync', {
       params: {
         query: {
           since: lastSync || undefined,

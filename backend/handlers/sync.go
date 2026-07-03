@@ -25,7 +25,7 @@ import (
 // @Success      200     {object}  api.SyncResponse "Successful sync response containing delta changes"
 // @Failure      400     {object}  map[string]string "Invalid request body"
 // @Failure      500     {object}  map[string]string "Internal server or database error"
-// @Router       /sync [post]
+// @Router       /v1/sync [post]
 func PostSync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

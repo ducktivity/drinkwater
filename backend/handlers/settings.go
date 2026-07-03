@@ -26,7 +26,7 @@ import (
 // @Failure      401  {object}  map[string]string "Missing or invalid token"
 // @Failure      404  {object}  map[string]string "No settings saved for this user yet"
 // @Failure      500  {object}  map[string]string "Internal server or database error"
-// @Router       /settings [get]
+// @Router       /v1/settings [get]
 func GetSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -64,7 +64,7 @@ func GetSettings(w http.ResponseWriter, r *http.Request) {
 // @Failure      400     {object}  map[string]string "Invalid request body"
 // @Failure      401     {object}  map[string]string "Missing or invalid token"
 // @Failure      500     {object}  map[string]string "Internal server or database error"
-// @Router       /settings [put]
+// @Router       /v1/settings [put]
 func PutSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

@@ -15,7 +15,7 @@ import (
 // @Security     BearerAuth
 // @Success      200  {object}  api.User          "The authenticated user"
 // @Failure      401  {object}  map[string]string "Missing or invalid token"
-// @Router       /auth/me [get]
+// @Router       /v1/auth/me [get]
 //
 // Login itself (requesting and verifying a code) now lives in the central identity
 // service, not here: Drinkwater only verifies the token the identity service issued.

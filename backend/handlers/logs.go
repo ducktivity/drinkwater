@@ -23,7 +23,7 @@ import (
 // @Success      200   {object}  api.LogsResponse  "Logs within the requested range, most recent first"
 // @Failure      400   {object}  map[string]string "Missing or invalid range parameters"
 // @Failure      500   {object}  map[string]string "Internal server or database error"
-// @Router       /logs [get]
+// @Router       /v1/logs [get]
 func GetLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

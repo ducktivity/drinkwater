@@ -5,8 +5,8 @@ import createClient from 'openapi-fetch'
  * issuer of login codes and session tokens. It is a *different origin* from the
  * Drinkwater app backend: the app's own `/auth/request` and `/auth/verify`
  * routes were removed, so passwordless login now talks to identity directly
- * (cross-origin, CORS-allowed), while token-authenticated calls like `/auth/me`,
- * `/sync`, `/logs` stay on the app backend via {@link apiClient} in api.ts.
+ * (cross-origin, CORS-allowed), while token-authenticated calls like `/v1/auth/me`,
+ * `/v1/sync`, `/v1/logs` stay on the app backend via {@link apiClient} in api.ts.
  *
  * Unlike the app backend, identity does not emit an OpenAPI schema into this
  * repo, so the request/response contract below is hand-written to mirror the

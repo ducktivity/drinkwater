@@ -57,7 +57,7 @@ export async function fetchLogsForDate(
   const { from, to } = localDayRange(dateKey)
 
   // Remote logs for the day (already-synced source of truth).
-  const { data, error, response } = await apiClient.GET('/logs', {
+  const { data, error, response } = await apiClient.GET('/v1/logs', {
     params: { query: { from, to } },
   })
   if (error)

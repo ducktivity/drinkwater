@@ -8,7 +8,7 @@
     },
     "basePath": "/",
     "paths": {
-        "/auth/me": {
+        "/v1/auth/me": {
             "get": {
                 "security": [
                     {
@@ -42,7 +42,7 @@
                 }
             }
         },
-        "/logs": {
+        "/v1/logs": {
             "get": {
                 "description": "Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are no longer cached locally.",
                 "produces": [
@@ -96,7 +96,7 @@
                 }
             }
         },
-        "/settings": {
+        "/v1/settings": {
             "get": {
                 "security": [
                     {
@@ -212,7 +212,7 @@
                 }
             }
         },
-        "/sync": {
+        "/v1/sync": {
             "post": {
                 "description": "Pushes local changes (upserts) to the server and pulls remote changes (delta) made on other devices.",
                 "consumes": [

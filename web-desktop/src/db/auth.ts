@@ -54,7 +54,7 @@ export async function verifyCode(
  * rejected (the 401 handler in api.ts clears it).
  */
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
-  const { data } = await apiClient.GET('/auth/me')
+  const { data } = await apiClient.GET('/v1/auth/me')
   return data ?? null
 }
 

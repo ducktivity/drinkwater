@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/auth/me": {
+    "/v1/auth/me": {
         parameters: {
             query?: never;
             header?: never;
@@ -54,7 +54,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/logs": {
+    "/v1/logs": {
         parameters: {
             query?: never;
             header?: never;
@@ -120,7 +120,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/settings": {
+    "/v1/settings": {
         parameters: {
             query?: never;
             header?: never;
@@ -253,7 +253,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/sync": {
+    "/v1/sync": {
         parameters: {
             query?: never;
             header?: never;

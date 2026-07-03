@@ -39,7 +39,7 @@ export const apiClient = createClient<paths>({
 })
 
 // Attach the session token (when present) as a bearer header on every request,
-// so protected endpoints (/sync, /logs, /auth/me) authenticate transparently and
+// so protected endpoints (/v1/sync, /v1/logs, /v1/auth/me) authenticate transparently and
 // anonymous clients simply send no header.
 apiClient.use({
   onRequest({ request }) {
