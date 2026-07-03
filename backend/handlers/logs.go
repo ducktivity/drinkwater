@@ -15,7 +15,7 @@ import (
 
 // GetLogs godoc
 // @Summary      Fetch water logs for a specific day
-// @Description  Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are no longer cached locally.
+// @Description  Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are not cached locally.
 // @Tags         logs
 // @Produce      json
 // @Param        from  query     string            true   "ISO-8601 timestamp marking the inclusive start of the range"
@@ -27,8 +27,7 @@ import (
 func GetLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// The acting user comes from the verified bearer token (RequireAuth, which
-	// also stamps the request-summary line with this id).
+	// The acting user comes from the verified bearer token (RequireAuth, which also stamps the request-summary line with this id).
 	userID, ok := auth.UserIDFromContext(ctx)
 	if !ok {
 		// RequireAuth guarantees a user; guard so a routing mistake fails closed.
@@ -36,8 +35,7 @@ func GetLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Parse the half-open [from, to) range from the query string. Both bounds
-	// are required so the query is always scoped to a single day.
+	// 1. Parse the half-open [from, to) range from the query string. Both bounds are required so the query is always scoped to a single day.
 	fromStr := r.URL.Query().Get("from")
 	toStr := r.URL.Query().Get("to")
 	if fromStr == "" || toStr == "" {
@@ -74,8 +72,7 @@ func GetLogs(w http.ResponseWriter, r *http.Request) {
 		logs = append(logs, api.WaterLog{
 			ID:       dbLog.ID,
 			AmountMl: dbLog.AmountMl,
-			// Always emit UTC so the wire format is canonical ("...Z"), matching
-			// the client and keeping the same instant byte-identical everywhere.
+			// Always emit UTC so the wire format is canonical ("...Z"), matching the client and keeping the same instant byte-identical everywhere.
 			LoggedAt:  dbLog.LoggedAt.Time.UTC(),
 			IsDeleted: dbLog.IsDeleted,
 		})

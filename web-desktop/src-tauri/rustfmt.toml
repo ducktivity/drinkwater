@@ -1,4 +1,2 @@
-# Codifies the indentation the Tauri scaffold (and this crate) already use, so
-# `cargo fmt --check` in Desktop CI matches the committed style instead of
-# rustfmt's 4-space default. Keep this in sync with the editor settings.
+# Codifies the indentation the Tauri scaffold (and this crate) already use, so `cargo fmt --check` in Desktop CI matches the committed style instead of rustfmt's 4-space default. Keep this in sync with the editor settings.
 tab_spaces = 2

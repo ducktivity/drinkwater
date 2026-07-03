@@ -7,9 +7,7 @@ import { AddLogDialog } from './AddLogDialog'
 import { ReminderModal } from './ReminderModal'
 
 /**
- * Renders the four modal dialogs, gated by the overlay context's visibility
- * state. Each dialog owns its own save/confirm logic and pulls what it needs
- * from context; this component only decides which ones are mounted.
+ * Renders the four modal dialogs, gated by the overlay context's visibility state. Each dialog owns its own save/confirm logic and pulls what it needs from context; this component only decides which ones are mounted.
  */
 export function AppDialogs() {
   const overlay = useOverlay()

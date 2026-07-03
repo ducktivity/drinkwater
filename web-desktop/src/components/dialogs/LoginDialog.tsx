@@ -9,9 +9,7 @@ interface Props {
 }
 
 /**
- * Two-step passwordless sign-in: enter an email to receive a 6-digit code, then
- * enter the code to start syncing. Until this completes the app stays fully
- * local, so the dialog is dismissable at any point with no side effects.
+ * Two-step passwordless sign-in: enter an email to receive a 6-digit code, then enter the code to start syncing. Until this completes the app stays fully local, so the dialog is dismissable at any point with no side effects.
  */
 export function LoginDialog(props: Props) {
   const auth = useAuth()

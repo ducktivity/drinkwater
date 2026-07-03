@@ -1,11 +1,7 @@
 import { useOverlay } from '../../context/OverlayContext'
 
 /**
- * The drink-water reminder modal. Raised by the reminder engine when the
- * interval elapses, on top of the native nudges (sound, taskbar flash, window
- * pop). It's deliberately loud — a tinted backdrop and a pulsing water drop — so
- * it can't be tuned out. Both answers ("Yes" / "Not yet") simply dismiss it; the
- * next reminder arrives when the interval next elapses.
+ * The drink-water reminder modal. Raised by the reminder engine when the interval elapses, on top of the native nudges (sound, taskbar flash, window pop). It's deliberately loud — a tinted backdrop and a pulsing water drop — so it can't be tuned out. Both answers ("Yes" / "Not yet") simply dismiss it; the next reminder arrives when the interval next elapses.
  */
 export function ReminderModal() {
   const overlay = useOverlay()

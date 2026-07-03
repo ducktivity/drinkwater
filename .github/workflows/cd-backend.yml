@@ -4,7 +4,7 @@ name: Backend CD
 #
 # CI holds NO SSH access to the box and never flips the live service. Going live is a deliberate manual step: the operator runs deploy/remote-deploy.sh from their machine, which copies the compose file + .env to the box and reconciles the stack over SSH (pull -> up -> /readyz -> auto-rollback). Expand-only migrations mean the still-running old container keeps working against the new schema until that manual cutover.
 #
-# Web Deploy and Desktop Release no longer chain off this workflow — they fire on the same push to main and go live alongside the backend, not after it.
+# Web Deploy and Desktop Release fire on the same push to main and go live alongside the backend, not chained after it.
 
 on:
   push:
@@ -15,10 +15,7 @@ permissions:
   contents: read
 
 jobs:
-  # Detect whether anything affecting the backend image changed in this push. We
-  # diff against the prior commit rather than using a top-level `on.push.paths`
-  # filter, so this workflow always starts and stays green — we just skip the
-  # expensive migrate/image jobs below when the backend is untouched.
+  # Detect whether anything affecting the backend image changed in this push. We diff against the prior commit rather than using a top-level `on.push.paths` filter, so this workflow always starts and stays green — we just skip the expensive migrate/image jobs below when the backend is untouched.
   changes:
     name: Detect backend changes
     runs-on: ubuntu-latest
@@ -32,20 +29,14 @@ jobs:
           filters: |
             backend: 'backend/**'
 
-  # Verification gate, extracted into a reusable workflow so the exact same gates
-  # also guard the tagged Desktop Release (see _backend-check.yml). The image is
-  # published only after this passes. Skipped (run stays green) when the backend
-  # did not change.
+  # Verification gate, extracted into a reusable workflow so the exact same gates also guard the tagged Desktop Release (see _backend-check.yml). The image is published only after this passes. Skipped (run stays green) when the backend did not change.
   check:
     name: Verify backend before image release
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     uses: ./.github/workflows/_backend-check.yml
 
-  # Migrations run here, against Neon, BEFORE the image is published. Expand-only,
-  # so the schema and the old container stay compatible until the manual box
-  # reconcile. Uses the production environment for DATABASE_URL_MIGRATOR; restrict
-  # that environment to main in repo settings.
+  # Migrations run here, against Neon, BEFORE the image is published. Expand-only, so the schema and the old container stay compatible until the manual box reconcile. Uses the production environment for DATABASE_URL_MIGRATOR; restrict that environment to main in repo settings.
   migrate:
     name: Apply migrations (goose -> Neon)
     needs: [changes, check]
@@ -71,9 +62,7 @@ jobs:
   image:
     name: Build & push image to GHCR
     needs: [changes, check, migrate]
-    # Publish only after the gate passed AND the migration applied. When the
-    # backend is unchanged, `latest` already points at the correct image, so
-    # there is nothing to release.
+    # Publish only after the gate passed AND the migration applied. When the backend is unchanged, `latest` already points at the correct image, so there is nothing to release.
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -114,8 +103,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Feed git metadata into the Dockerfile ARGs -> ldflags, so the running
-          # binary (and its logs/Sentry release) report the exact commit.
+          # Feed git metadata into the Dockerfile ARGs -> ldflags, so the running binary (and its logs/Sentry release) report the exact commit.
           build-args: |
             VERSION=${{ github.ref_name }}
             COMMIT=${{ github.sha }}

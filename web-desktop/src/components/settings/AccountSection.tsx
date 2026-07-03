@@ -3,9 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import { LoginDialog } from '../dialogs/LoginDialog'
 
 /**
- * The account row in the settings area: a "Sign in to sync" entry when logged
- * out, or the signed-in email with a sign-out action. Owns its own login-dialog
- * visibility so the rest of the tree stays unaware of auth UI state.
+ * The account row in the settings area: a "Sign in to sync" entry when logged out, or the signed-in email with a sign-out action. Owns its own login-dialog visibility so the rest of the tree stays unaware of auth UI state.
  */
 export function AccountSection() {
   const auth = useAuth()

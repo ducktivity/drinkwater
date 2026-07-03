@@ -1,9 +1,5 @@
 /**
- * Comparator that orders log entries most-recent-first by their actual instant.
- * Compares parsed timestamps rather than the raw ISO strings, so entries stay
- * correctly ordered even when timestamps arrive in mixed formats — e.g. the
- * backend's timezone-offset form ("…+08:00") alongside the client's UTC "Z"
- * form. Plain string/locale comparison of those mixed forms is unreliable.
+ * Comparator that orders log entries most-recent-first by their actual instant. Compares parsed timestamps rather than the raw ISO strings, so entries stay correctly ordered even when timestamps arrive in mixed formats — e.g. the backend's timezone-offset form ("…+08:00") alongside the client's UTC "Z" form. Plain string/locale comparison of those mixed forms is unreliable.
  */
 export function compareLoggedAtDesc(
   a: { logged_at: string },
@@ -30,8 +26,7 @@ export function shiftDateKey(dateKey: string, dayDelta: number) {
 }
 
 /**
- * Builds an ISO timestamp for a local "HH:mm" time-of-day on the calendar day
- * named by a YYYY-MM-DD key. Used when adding a log to a specific (past) day.
+ * Builds an ISO timestamp for a local "HH:mm" time-of-day on the calendar day named by a YYYY-MM-DD key. Used when adding a log to a specific (past) day.
  */
 export function isoFromDateAndTime(dateKey: string, timeValue: string) {
   const [year, month, day] = dateKey.split('-').map(Number)
@@ -74,8 +69,7 @@ export function toTimeInputValue(isoTimestamp: string) {
 }
 
 /**
- * Returns a new ISO timestamp that keeps the original date but applies the
- * given local "HH:mm" time-of-day. Seconds and milliseconds are zeroed.
+ * Returns a new ISO timestamp that keeps the original date but applies the given local "HH:mm" time-of-day. Seconds and milliseconds are zeroed.
  */
 export function withTimeOfDay(isoTimestamp: string, timeValue: string) {
   const [hours, minutes] = timeValue.split(':').map(Number)

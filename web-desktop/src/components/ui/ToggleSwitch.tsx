@@ -6,8 +6,7 @@ interface Props {
 }
 
 /**
- * A small pill toggle switch matching the dark UI theme: a label on the left
- * and a sliding knob that moves right and turns blue when on.
+ * A small pill toggle switch matching the dark UI theme: a label on the left and a sliding knob that moves right and turns blue when on.
  */
 export function ToggleSwitch(props: Props) {
   return (

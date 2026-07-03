@@ -57,8 +57,7 @@ export function HistoryProvider(props: ParentProps) {
   )
 
   /**
-   * Total millilitres for the selected day. Today reuses the live total (which
-   * folds in the active bottle); past days sum their fetched logs.
+   * Total millilitres for the selected day. Today reuses the live total (which folds in the active bottle); past days sum their fetched logs.
    */
   const selectedDayTotalMl = createMemo(() =>
     isViewingToday()
@@ -67,14 +66,9 @@ export function HistoryProvider(props: ParentProps) {
   )
 
   /**
-   * Loads a past day's logs whenever the user navigates to one. Today needs no
-   * load — its logs come live from IndexedDB.
+   * Loads a past day's logs whenever the user navigates to one. Today needs no load — its logs come live from IndexedDB.
    *
-   * Two-phase so recent/offline days appear instantly: first paint whatever is
-   * already in IndexedDB (local retention window plus any unsynced edits), then
-   * reconcile against the backend (authoritative for pruned/other-device logs).
-   * The selected date is re-checked in each step so a slow load can't clobber a
-   * newer selection (race guard).
+   * Two-phase so recent/offline days appear instantly: first paint whatever is already in IndexedDB (local retention window plus any unsynced edits), then reconcile against the backend (authoritative for pruned/other-device logs). The selected date is re-checked in each step so a slow load can't clobber a newer selection (race guard).
    */
   createEffect(() => {
     const date = selectedDate()
@@ -88,16 +82,12 @@ export function HistoryProvider(props: ParentProps) {
     setIsLoadingHistory(true)
 
     void (async () => {
-      // Phase 1 — instant paint from IndexedDB so logs within the retention
-      // window (and unsynced changes) render immediately, even while offline.
+      // Phase 1 — instant paint from IndexedDB so logs within the retention window (and unsynced changes) render immediately, even while offline.
       const localLogs = await readLocalLogsForDate(date)
       if (isStale()) return
       setHistoryLogs(localLogs)
 
-      // Phase 2 — reconcile against the backend, the source of truth for days
-      // already pruned from IndexedDB and for changes from other devices. Only
-      // logged-in users have remote data; while logged out the app is local-only,
-      // so skip the fetch entirely (it would 401 and surface a spurious error).
+      // Phase 2 — reconcile against the backend, the source of truth for days already pruned from IndexedDB and for changes from other devices. Only logged-in users have remote data; while logged out the app is local-only, so skip the fetch entirely (it would 401 and surface a spurious error).
       if (!auth.isLoggedIn()) {
         setIsLoadingHistory(false)
         return
@@ -110,8 +100,7 @@ export function HistoryProvider(props: ParentProps) {
       } catch (err) {
         logger.error(err)
         if (isStale()) return
-        // The local view is already on screen, so only surface an error when we
-        // had nothing local to show; otherwise a failed reconcile is silent.
+        // The local view is already on screen, so only surface an error when we had nothing local to show; otherwise a failed reconcile is silent.
         if (localLogs.length === 0) {
           if (!navigator.onLine) {
             toast.showToast(
@@ -136,10 +125,7 @@ export function HistoryProvider(props: ParentProps) {
   })
 
   /**
-   * Reflects a mutated log in the history list so past-day edits/additions show
-   * immediately, without waiting for a re-fetch. A no-op when viewing today,
-   * where the live query already drives the list. Deletions drop the entry;
-   * edits and additions upsert it, keeping the list sorted most-recent-first.
+   * Reflects a mutated log in the history list so past-day edits/additions show immediately, without waiting for a re-fetch. A no-op when viewing today, where the live query already drives the list. Deletions drop the entry; edits and additions upsert it, keeping the list sorted most-recent-first.
    */
   function syncHistoryView(changed: LocalWaterLog) {
     if (isViewingToday()) return

@@ -14,10 +14,7 @@ import { useSettings } from './SettingsContext'
 import { useHydration } from './HydrationContext'
 
 /**
- * UI overlay state: the slide-over settings drawer and the four dialogs'
- * visibility (and the entity each acts on). Each dialog owns its own
- * save/confirm logic; the context only holds the shared state and the
- * bottle-flow handlers that open/resolve the confirm dialog.
+ * UI overlay state: the slide-over settings drawer and the four dialogs' visibility (and the entity each acts on). Each dialog owns its own save/confirm logic; the context only holds the shared state and the bottle-flow handlers that open/resolve the confirm dialog.
  */
 interface OverlayContextValue {
   /** Whether the slide-over settings drawer is open. */
@@ -64,12 +61,9 @@ export function OverlayProvider(props: ParentProps) {
   const [isSettingsOpen, setIsSettingsOpen] = createSignal(false)
 
   const [isConfirmVisible, setIsConfirmVisible] = createSignal(false)
-  // Millilitres the confirm dialog will commit when accepted. This is the full
-  // bottle size when emptying via drag, or the partially-drunk amount when the
-  // user taps "Log drank".
+  // Millilitres the confirm dialog will commit when accepted. This is the full bottle size when emptying via drag, or the partially-drunk amount when the user taps "Log drank".
   const [pendingLogMl, setPendingLogMl] = createSignal(0)
-  // The fill fraction to restore if the user cancels the confirm dialog. Lets the
-  // drag-to-empty and "log drank" flows each return the bottle to a sensible level.
+  // The fill fraction to restore if the user cancels the confirm dialog. Lets the drag-to-empty and "log drank" flows each return the bottle to a sensible level.
   const [fillToRestoreOnCancel, setFillToRestoreOnCancel] = createSignal(0.05)
   // The log entry pending deletion (null when no delete is in progress)
   const [logPendingDeletion, setLogPendingDeletion] =
@@ -79,14 +73,10 @@ export function OverlayProvider(props: ParentProps) {
     createSignal<LocalWaterLog | null>(null)
   // Whether the "add a past log" dialog is open.
   const [isAddingLog, setIsAddingLog] = createSignal(false)
-  // Whether the drink-water reminder modal is showing. Raised by the reminder
-  // engine when the interval elapses, and cleared when the user answers.
+  // Whether the drink-water reminder modal is showing. Raised by the reminder engine when the interval elapses, and cleared when the user answers.
   const [isReminderVisible, setIsReminderVisible] = createSignal(false)
 
-  // Wire up the gentle drink-water reminder. Each time the interval elapses the
-  // engine fires its native nudges (sound, taskbar flash, window pop) and we
-  // raise the in-app modal. Dismissing the modal does nothing more than close
-  // it — the next reminder simply arrives when the interval next elapses.
+  // Wire up the gentle drink-water reminder. Each time the interval elapses the engine fires its native nudges (sound, taskbar flash, window pop) and we raise the in-app modal. Dismissing the modal does nothing more than close it — the next reminder simply arrives when the interval next elapses.
   createReminderEngine({
     settings: settings.reminder,
     onReminder: () => setIsReminderVisible(true),
@@ -105,9 +95,7 @@ export function OverlayProvider(props: ParentProps) {
   }
 
   /**
-   * Called when the user taps "Log drank": logs the amount consumed from the
-   * active bottle so far (without requiring a drag to empty) via the confirm
-   * dialog. The bottle level is left untouched until the log is confirmed.
+   * Called when the user taps "Log drank": logs the amount consumed from the active bottle so far (without requiring a drag to empty) via the confirm dialog. The bottle level is left untouched until the log is confirmed.
    */
   function handleLogDrank() {
     const drankMl = Math.round(
@@ -130,9 +118,7 @@ export function OverlayProvider(props: ParentProps) {
       is_synced: 0,
     })
     hydration.setFillFraction(1)
-    // The drunk amount is now recorded as a log and the bottle is full again, so
-    // the active bottle no longer contributes to the active-bottle portion of the
-    // daily total (it counts via the log above).
+    // The drunk amount is now recorded as a log and the bottle is full again, so the active bottle no longer contributes to the active-bottle portion of the daily total (it counts via the log above).
     hydration.setSettledFillFraction(1)
     setIsConfirmVisible(false)
     savePersistedState({ fillFraction: 1 })

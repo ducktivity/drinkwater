@@ -5,9 +5,7 @@ import { NumberInput } from '../ui/NumberInput'
 import { ToggleSwitch } from '../ui/ToggleSwitch'
 
 /**
- * Settings for the gentle drink-water reminder: a toggle plus the interval
- * between nudges. The interval input is only shown while the reminder is on.
- * Reads and updates the reminder settings through the settings context.
+ * Settings for the gentle drink-water reminder: a toggle plus the interval between nudges. The interval input is only shown while the reminder is on. Reads and updates the reminder settings through the settings context.
  */
 export function ReminderSettings() {
   const settings = useSettings()

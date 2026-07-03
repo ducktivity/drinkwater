@@ -25,10 +25,7 @@ export interface HydrationUIState {
 }
 
 /**
- * Reads persisted state from localStorage.
- * If the stored date differs from today, resets the active bottle's fill level
- * while keeping user settings (size, goal). Note that the amount drunk today is
- * derived from the IndexedDB logs, not from this UI state.
+ * Reads persisted state from localStorage. If the stored date differs from today, resets the active bottle's fill level while keeping user settings (size, goal). Note that the amount drunk today is derived from the IndexedDB logs, not from this UI state.
  */
 export function loadPersistedState(): HydrationUIState {
   try {
@@ -36,11 +33,9 @@ export function loadPersistedState(): HydrationUIState {
     if (serialized) {
       const parsed = JSON.parse(serialized) as HydrationUIState
       const today = getTodayKey()
-      // Fall back to the default schedule for state persisted before the
-      // schedule feature existed.
+      // Fall back to the default schedule when the persisted state lacks one.
       const schedule = parsed.schedule ?? DEFAULT_SCHEDULE
-      // Merge persisted reminder settings over the defaults so state saved
-      // before the reminder feature existed (or missing newer fields) is filled.
+      // Merge persisted reminder settings over the defaults so any missing fields are filled in.
       const reminder = { ...DEFAULT_REMINDER_SETTINGS, ...parsed.reminder }
       // New day — carry forward settings but reset the active bottle to full
       if (parsed.date !== today) {
@@ -67,16 +62,11 @@ export function loadPersistedState(): HydrationUIState {
   }
 }
 
-// In-memory snapshot of the persisted state, seeded once from localStorage.
-// Each savePersistedState call merges its slice in here so callers can persist
-// just the fields they own while the full blob stays intact on disk.
+// In-memory snapshot of the persisted state, seeded once from localStorage. Each savePersistedState call merges its slice in here so callers can persist just the fields they own while the full blob stays intact on disk.
 let snapshot: HydrationUIState = loadPersistedState()
 
 /**
- * Persists a partial slice of the UI state. The slice is merged into the
- * in-memory snapshot, stamped with today's date, and the full blob is written
- * to localStorage. This lets each context persist only the fields it owns
- * (e.g. `{ size }` or `{ fillFraction }`) without clobbering the others.
+ * Persists a partial slice of the UI state. The slice is merged into the in-memory snapshot, stamped with today's date, and the full blob is written to localStorage. This lets each context persist only the fields it owns (e.g. `{ size }` or `{ fillFraction }`) without clobbering the others.
  */
 export function savePersistedState(partial: Partial<HydrationUIState>) {
   snapshot = { ...snapshot, ...partial, date: getTodayKey() }

@@ -17,9 +17,7 @@ import (
 // @Failure      401  {object}  map[string]string "Missing or invalid token"
 // @Router       /v1/auth/me [get]
 //
-// Login itself (requesting and verifying a code) now lives in the central identity
-// service, not here: Drinkwater only verifies the token the identity service issued.
-// GetMe therefore needs no database read — the user id and email travel in the token.
+// Login itself (requesting and verifying a code) lives in the central identity service, not here: Drinkwater only verifies the token the identity service issued. GetMe therefore needs no database read — the user id and email travel in the token.
 func GetMe(w http.ResponseWriter, r *http.Request) {
 	p, ok := auth.PrincipalFromContext(r.Context())
 	if !ok {

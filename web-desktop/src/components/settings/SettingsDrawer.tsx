@@ -20,17 +20,12 @@ function Section(props: { title: string; children: JSX.Element }) {
 }
 
 /**
- * A right-anchored slide-over panel holding everything that used to clutter the
- * main card: the account row, bottle/goal preferences, the hydration schedule,
- * and reminder settings. Reads its open state from the overlay context and each
- * section pulls its own state from context, so the drawer only arranges them.
- * Closes on backdrop click, the X, or Escape, and locks body scroll while open.
+ * A right-anchored slide-over panel holding the account row, bottle/goal preferences, the hydration schedule, and reminder settings. Reads its open state from the overlay context and each section pulls its own state from context, so the drawer only arranges them. Closes on backdrop click, the X, or Escape, and locks body scroll while open.
  */
 export function SettingsDrawer() {
   const overlay = useOverlay()
 
-  // While open: lock background scroll and let Escape close the drawer. The
-  // effect re-runs whenever isSettingsOpen flips, cleaning up the listener/lock each time.
+  // While open: lock background scroll and let Escape close the drawer. The effect re-runs whenever isSettingsOpen flips, cleaning up the listener/lock each time.
   createEffect(() => {
     if (!overlay.isSettingsOpen()) return
 

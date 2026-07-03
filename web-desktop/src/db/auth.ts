@@ -3,9 +3,7 @@ import { identityClient } from './identity'
 import { setToken } from './token'
 
 /**
- * The auth API calls (request code, verify code, who-am-I). Raw token storage
- * lives in token.ts; this module layers the network calls on top. Re-exported
- * here so callers have a single auth entry point.
+ * The auth API calls (request code, verify code, who-am-I). Raw token storage lives in token.ts; this module layers the network calls on top. Re-exported here so callers have a single auth entry point.
  */
 export { getToken, setToken, clearToken, AUTH_LOGOUT_EVENT } from './token'
 
@@ -16,9 +14,7 @@ export interface AuthUser {
 }
 
 /**
- * Asks the identity service to email a 6-digit login code to `email`, creating
- * the account if it is new. Returns an error message on failure (e.g.
- * rate-limited or invalid email), or null on success.
+ * Asks the identity service to email a 6-digit login code to `email`, creating the account if it is new. Returns an error message on failure (e.g. rate-limited or invalid email), or null on success.
  */
 export async function requestCode(email: string): Promise<string | null> {
   const { error } = await identityClient.POST('/v1/auth/request', {
@@ -30,9 +26,7 @@ export async function requestCode(email: string): Promise<string | null> {
 }
 
 /**
- * Exchanges an email + code for a session token via the identity service,
- * persisting it on success. Returns the authenticated user, or an error message
- * string on failure.
+ * Exchanges an email + code for a session token via the identity service, persisting it on success. Returns the authenticated user, or an error message string on failure.
  */
 export async function verifyCode(
   email: string,
@@ -49,9 +43,7 @@ export async function verifyCode(
 }
 
 /**
- * Validates a stored token by fetching the current account. Returns the user
- * when the token is still valid, or null when there is no token / it was
- * rejected (the 401 handler in api.ts clears it).
+ * Validates a stored token by fetching the current account. Returns the user when the token is still valid, or null when there is no token / it was rejected (the 401 handler in api.ts clears it).
  */
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
   const { data } = await apiClient.GET('/v1/auth/me')

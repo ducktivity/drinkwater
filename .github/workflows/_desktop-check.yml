@@ -1,15 +1,10 @@
 name: Desktop Check
 
-# Reusable workflow for Tauri desktop shell Rust validation: fmt, clippy.
-# Called by:
+# Reusable workflow for Tauri desktop shell Rust validation: fmt, clippy. Called by:
 #   - CI workflows (ci-desktop.yml) on every PR/main push
 #   - CD workflows (cd-desktop.yml) before releasing
 #
-# It validates ONLY the Rust side (web-desktop/src-tauri). The SolidJS bundle
-# is validated separately by _web-check.yml (which ci-desktop.yml and
-# cd-desktop.yml also require). This separation means a desktop-only break
-# (Rust that won't compile or is unformatted) is caught early without
-# rebuilding the web bundle.
+# It validates ONLY the Rust side (web-desktop/src-tauri). The SolidJS bundle is validated separately by _web-check.yml (which ci-desktop.yml and cd-desktop.yml also require). This separation means a desktop-only break (Rust that won't compile or is unformatted) is caught early without rebuilding the web bundle.
 
 on:
   workflow_call:

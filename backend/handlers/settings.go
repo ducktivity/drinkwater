@@ -40,8 +40,7 @@ func GetSettings(w http.ResponseWriter, r *http.Request) {
 	row, err := dbgen.New(database.DB).GetUserSettings(ctx, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// No settings yet: the client keeps its local fallbacks and the row is
-			// created lazily on the first save (PutSettings).
+			// No settings yet: the client keeps its local fallbacks and the row is created lazily on the first save (PutSettings).
 			clientError(w, r, http.StatusNotFound, "no settings for user", `{"error": "No settings saved"}`)
 			return
 		}
@@ -81,8 +80,7 @@ func PutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	// The document is opaque, but it must be present and well-formed JSON so we
-	// never persist garbage into the jsonb column.
+	// The document is opaque, but it must be present and well-formed JSON so we never persist garbage into the jsonb column.
 	if len(input.Settings) == 0 || !json.Valid(input.Settings) {
 		clientError(w, r, http.StatusBadRequest, "missing or invalid settings document", `{"error": "A valid settings document is required"}`)
 		return

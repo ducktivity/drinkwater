@@ -1,8 +1,7 @@
 import { timeValueToDate } from './utils'
 
 /**
- * A single time-based hydration checkpoint: the user is expected to have drunk
- * at least `targetMl` (cumulative, since the start of the day) by `time`.
+ * A single time-based hydration checkpoint: the user is expected to have drunk at least `targetMl` (cumulative, since the start of the day) by `time`.
  */
 export interface ScheduleCheckpoint {
   /** Stable unique id used for list rendering and inline edits. */
@@ -30,9 +29,7 @@ export interface CheckpointStatus extends ScheduleCheckpoint {
 }
 
 /**
- * Default schedule spreading a 2 L day across four deadlines, mirroring the
- * product example (morning through evening). Ids are stable strings so the
- * default is deterministic.
+ * Default schedule spreading a 2 L day across four deadlines, mirroring the product example (morning through evening). Ids are stable strings so the default is deterministic.
  */
 export const DEFAULT_SCHEDULE: ScheduleCheckpoint[] = [
   { id: 'cp-0900', time: '09:00', targetMl: 500 },
@@ -42,9 +39,7 @@ export const DEFAULT_SCHEDULE: ScheduleCheckpoint[] = [
 ]
 
 /**
- * Sorts the schedule chronologically and tags each checkpoint with its current
- * state and the amount still needed, given how much has been drunk today and
- * the current time. Pure — callers pass `now` so the result is reactive.
+ * Sorts the schedule chronologically and tags each checkpoint with its current state and the amount still needed, given how much has been drunk today and the current time. Pure — callers pass `now` so the result is reactive.
  */
 export function evaluateSchedule(
   schedule: ScheduleCheckpoint[],
@@ -68,9 +63,7 @@ export function evaluateSchedule(
 }
 
 /**
- * Returns the next checkpoint the user is working toward: the earliest
- * not-yet-met checkpoint whose deadline has not passed. Returns null when every
- * upcoming checkpoint is already satisfied.
+ * Returns the next checkpoint the user is working toward: the earliest not-yet-met checkpoint whose deadline has not passed. Returns null when every upcoming checkpoint is already satisfied.
  */
 export function getNextCheckpoint(
   statuses: CheckpointStatus[],
@@ -79,10 +72,7 @@ export function getNextCheckpoint(
 }
 
 /**
- * Returns the most pressing missed checkpoint (the latest passed deadline the
- * user has fallen behind on), or null when the user is on track. The latest
- * missed checkpoint has the highest cumulative target, so it best summarises how
- * far behind the user is.
+ * Returns the most pressing missed checkpoint (the latest passed deadline the user has fallen behind on), or null when the user is on track. The latest missed checkpoint has the highest cumulative target, so it best summarises how far behind the user is.
  */
 export function getMostRecentMissed(
   statuses: CheckpointStatus[],

@@ -2,10 +2,7 @@ import { useOverlay } from '../../context/OverlayContext'
 import { SyncButton } from './SyncButton'
 
 /**
- * The app's top bar: brand on the left, and the manual-sync control plus a
- * settings button on the right. Its inner content is constrained to the same
- * max width as the main card so the brand aligns with the card's left edge.
- * Opens the settings drawer through the overlay context.
+ * The app's top bar: brand on the left, and the manual-sync control plus a settings button on the right. Its inner content is constrained to the same max width as the main card so the brand aligns with the card's left edge. Opens the settings drawer through the overlay context.
  */
 export function Navbar() {
   const overlay = useOverlay()

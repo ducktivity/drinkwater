@@ -24,19 +24,13 @@ const STATE_LABELS: Record<CheckpointState, string> = {
 }
 
 /**
- * Editable list of timed hydration checkpoints. Each row sets a deadline time
- * and the cumulative millilitres expected by then; rows can be added or removed.
- * A live status badge shows whether each checkpoint is met, missed, or upcoming.
- * Reads the schedule and today's total from context and edits in place.
+ * Editable list of timed hydration checkpoints. Each row sets a deadline time and the cumulative millilitres expected by then; rows can be added or removed. A live status badge shows whether each checkpoint is met, missed, or upcoming. Reads the schedule and today's total from context and edits in place.
  */
 export function ScheduleSettings() {
   const settings = useSettings()
   const hydration = useHydration()
 
-  // Status of every checkpoint, looked up by id. We render rows in the
-  // schedule's stable insertion order (not sorted by time) so that editing a
-  // checkpoint's time never reorders the list and steals focus from the input;
-  // the badge for each row is pulled from this map instead.
+  // Status of every checkpoint, looked up by id. We render rows in the schedule's stable insertion order (not sorted by time) so that editing a checkpoint's time never reorders the list and steals focus from the input; the badge for each row is pulled from this map instead.
   const statusById = createMemo(() => {
     const map = new Map<string, CheckpointStatus>()
     for (const status of evaluateSchedule(

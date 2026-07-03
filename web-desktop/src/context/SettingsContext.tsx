@@ -51,20 +51,14 @@ export function SettingsProvider(props: ParentProps) {
 
   const [bottleSize, setBottleSizeSignal] = createSignal(initialState.size)
   const [dailyGoal, setDailyGoalSignal] = createSignal(initialState.goal)
-  // Timed hydration schedule (deadlines + cumulative targets). Held in a store
-  // (not a signal) so edits mutate a single checkpoint field in place. This
-  // keeps each checkpoint's object reference stable, so the editor's <For> rows
-  // are reused rather than recreated on every keystroke — which is what keeps
-  // the time/amount inputs from losing focus mid-edit.
+  // Timed hydration schedule (deadlines + cumulative targets). Held in a store (not a signal) so edits mutate a single checkpoint field in place. This keeps each checkpoint's object reference stable, so the editor's <For> rows are reused rather than recreated on every keystroke — which is what keeps the time/amount inputs from losing focus mid-edit.
   const [schedule, setSchedule] = createStore<ScheduleCheckpoint[]>(
     initialState.schedule,
   )
   // Drink-water reminder settings (gentle cadence + force escalation).
   const [reminder, setReminder] = createSignal(initialState.reminder)
 
-  // Ticking clock that drives schedule status (next goal / behind warnings).
-  // Updated periodically so deadlines flip from "upcoming" to "missed" without
-  // requiring user interaction.
+  // Ticking clock that drives schedule status (next goal / behind warnings). Updated periodically so deadlines flip from "upcoming" to "missed" without requiring user interaction.
   const [now, setNow] = createSignal(new Date())
 
   const auth = useAuth()
@@ -79,9 +73,7 @@ export function SettingsProvider(props: ParentProps) {
     }
   }
 
-  // Debounce backend pushes so a burst of edits (e.g. dragging a checkpoint or
-  // rapid goal taps) collapses into a single best-effort write. Cleared on
-  // unmount so a pending push never fires after teardown.
+  // Debounce backend pushes so a burst of edits (e.g. dragging a checkpoint or rapid goal taps) collapses into a single best-effort write. Cleared on unmount so a pending push never fires after teardown.
   let pushTimer: ReturnType<typeof setTimeout> | undefined
   function schedulePush() {
     if (!auth.isLoggedIn()) return
@@ -95,18 +87,12 @@ export function SettingsProvider(props: ParentProps) {
   })
 
   /**
-   * Applies settings fetched from the server into local state. Writes the
-   * underlying signal/store setters directly (not the public mutators) and
-   * persists them, deliberately skipping {@link schedulePush} so loading from the
-   * server does not echo straight back as a write.
+   * Applies settings fetched from the server into local state. Writes the underlying signal/store setters directly (not the public mutators) and persists them, deliberately skipping {@link schedulePush} so loading from the server does not echo straight back as a write.
    */
   function applyServerSettings(serverSettings: SyncableSettings) {
     setBottleSizeSignal(serverSettings.size)
     setDailyGoalSignal(serverSettings.goal)
-    // reconcile replaces the whole schedule store with the server snapshot —
-    // including dropping any extra trailing checkpoints — while keeping object
-    // identity for checkpoints whose id is unchanged (a plain-array assignment
-    // would merge by index and leave a stale tail).
+    // reconcile replaces the whole schedule store with the server snapshot — including dropping any extra trailing checkpoints — while keeping object identity for checkpoints whose id is unchanged (a plain-array assignment would merge by index and leave a stale tail).
     setSchedule(reconcile(serverSettings.schedule))
     setReminder(serverSettings.reminder)
     savePersistedState({
@@ -130,10 +116,7 @@ export function SettingsProvider(props: ParentProps) {
   }
 
   /**
-   * Updates a single field of one checkpoint in place. Using the store's
-   * path syntax (predicate + key + value) means only the targeted field
-   * changes, so the checkpoint's object identity — and the editor row bound to
-   * it — survives the edit instead of being recreated.
+   * Updates a single field of one checkpoint in place. Using the store's path syntax (predicate + key + value) means only the targeted field changes, so the checkpoint's object identity — and the editor row bound to it — survives the edit instead of being recreated.
    */
   function updateCheckpoint(id: string, changes: Partial<ScheduleCheckpoint>) {
     for (const [key, value] of Object.entries(changes)) {
@@ -165,9 +148,7 @@ export function SettingsProvider(props: ParentProps) {
   }
 
   /**
-   * Applies a partial change to the reminder settings. When the reminder is
-   * being switched on, requests notification permission so the browser can
-   * surface the nudges.
+   * Applies a partial change to the reminder settings. When the reminder is being switched on, requests notification permission so the browser can surface the nudges.
    */
   function changeReminder(changes: Partial<ReminderSettingsValue>) {
     if (changes.enabled) {
@@ -178,12 +159,7 @@ export function SettingsProvider(props: ParentProps) {
     schedulePush()
   }
 
-  // Load the account's saved settings once per sign-in (server wins). When the
-  // account has no settings yet (a definitive 404 → null), seed it from the
-  // current local settings so this device's configuration becomes the account
-  // default. A non-definitive failure (offline, 5xx, …) rejects and is logged,
-  // leaving local state untouched and un-seeded. Runs for both fresh logins and
-  // restored sessions, since both flip auth.user() from null to a value.
+  // Load the account's saved settings once per sign-in (server wins). When the account has no settings yet (a definitive 404 → null), seed it from the current local settings so this device's configuration becomes the account default. A non-definitive failure (offline, 5xx, …) rejects and is logged, leaving local state untouched and un-seeded. Runs for both fresh logins and restored sessions, since both flip auth.user() from null to a value.
   let settingsLoaded = false
   createEffect(() => {
     const currentUser = auth.user()

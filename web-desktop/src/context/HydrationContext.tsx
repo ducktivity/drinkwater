@@ -51,9 +51,7 @@ export function HydrationProvider(props: ParentProps) {
   const [fillFraction, setFillFraction] = createSignal(
     initialState.fillFraction,
   )
-  // The active bottle's level as of the last settled interaction (drag release,
-  // log, or cancel). Kept separate from fillFraction so the daily total folds in
-  // the in-progress bottle only when dragging stops, not on every drag frame.
+  // The active bottle's level as of the last settled interaction (drag release, log, or cancel). Kept separate from fillFraction so the daily total folds in the in-progress bottle only when dragging stops, not on every drag frame.
   const [settledFillFraction, setSettledFillFraction] = createSignal(
     initialState.fillFraction,
   )
@@ -69,11 +67,7 @@ export function HydrationProvider(props: ParentProps) {
   })
 
   /**
-   * Total millilitres consumed today: the sum of the live IndexedDB logs (so it
-   * always reflects added, edited, and deleted entries) plus whatever has been
-   * drunk from the active bottle since it was last settled. The active-bottle
-   * portion uses settledFillFraction, so dragging the bottle only moves this
-   * figure once the drag stops — not on every frame.
+   * Total millilitres consumed today: the sum of the live IndexedDB logs (so it always reflects added, edited, and deleted entries) plus whatever has been drunk from the active bottle since it was last settled. The active-bottle portion uses settledFillFraction, so dragging the bottle only moves this figure once the drag stops — not on every frame.
    */
   const totalMlConsumedToday = createMemo(() => {
     const loggedTotal = todayLogs().reduce((sum, log) => sum + log.amount_ml, 0)
@@ -89,8 +83,7 @@ export function HydrationProvider(props: ParentProps) {
   }
 
   /**
-   * Called when a drag ends above the empty threshold. Commits the resting level
-   * so the partially-drunk active bottle folds into today's total, and persists it.
+   * Called when a drag ends above the empty threshold. Commits the resting level so the partially-drunk active bottle folds into today's total, and persists it.
    */
   function handleDragSettled() {
     setSettledFillFraction(fillFraction())
@@ -103,8 +96,7 @@ export function HydrationProvider(props: ParentProps) {
       db.waterLogs.filter((log) => !log.is_deleted).sortBy('logged_at'),
     ).subscribe({ next: setWaterLogs, error: logger.error })
 
-    // Prune stale (non-today) synced logs that the UI never renders. Runs even
-    // when offline, where the sync below would bail before its own cleanup step.
+    // Prune stale (non-today) synced logs that the UI never renders. Runs even when offline, where the sync below would bail before its own cleanup step.
     cleanupSyncedStaleLogs().catch(logger.error)
 
     // Attempt an initial sync on app load

@@ -3,8 +3,7 @@ import { useHistory } from '../../context/HistoryContext'
 import { useSettings } from '../../context/SettingsContext'
 
 /**
- * Renders a single stat tile with a muted label and a bold value.
- * The optional valueClass overrides the value colour (used to highlight stats).
+ * Renders a single stat tile with a muted label and a bold value. The optional valueClass overrides the value colour (used to highlight stats).
  */
 const renderStatCard = (
   label: string,
@@ -20,9 +19,7 @@ const renderStatCard = (
 )
 
 /**
- * Displays the selected day's hydration progress: the amount drunk, how far it
- * is toward the daily goal (as a percentage), and the goal itself. Reads the
- * day's total and goal straight from context.
+ * Displays the selected day's hydration progress: the amount drunk, how far it is toward the daily goal (as a percentage), and the goal itself. Reads the day's total and goal straight from context.
  */
 export function StatsRow() {
   const history = useHistory()

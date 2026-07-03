@@ -11,16 +11,13 @@ interface Props {
   /** Fired with the parsed integer value. */
   onValueChange: (value: number) => void
   /**
-   * When true, fire on every keystroke (`input`) rather than only on commit
-   * (`change`). Use for fields bound to local state in a modal.
+   * When true, fire on every keystroke (`input`) rather than only on commit (`change`). Use for fields bound to local state in a modal.
    */
   eager?: boolean
 }
 
 /**
- * A styled numeric input matching the dark UI theme. Parses its value to an
- * integer, falling back to `fallback` for empty/invalid input, and optionally
- * renders a unit label beside the field.
+ * A styled numeric input matching the dark UI theme. Parses its value to an integer, falling back to `fallback` for empty/invalid input, and optionally renders a unit label beside the field.
  */
 export function NumberInput(props: Props) {
   const handle = (e: { currentTarget: HTMLInputElement }) =>

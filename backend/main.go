@@ -30,8 +30,7 @@ import (
 //
 //	go build -ldflags "-X main.version=1.2.3 -X main.commit=$(git rev-parse HEAD)"
 //
-// When built without ldflags (local `go run`, `air`), resolveBuildInfo() fills
-// these from the embedded VCS stamp so logs/Sentry still carry a commit.
+// When built without ldflags (local `go run`, `air`), resolveBuildInfo() fills these from the embedded VCS stamp so logs/Sentry still carry a commit.
 var (
 	version   = ""
 	commit    = ""
@@ -51,9 +50,7 @@ type config struct {
 
 func loadConfig() config {
 	env := getenv("ENV", "development")
-	// Local development defaults to pretty, trimmed text output; staging/prod
-	// default to JSON so the log aggregator can parse it. An explicit LOG_FORMAT
-	// still wins, so either format can be forced in any environment.
+	// Local development defaults to pretty, trimmed text output; staging/prod default to JSON so the log aggregator can parse it. An explicit LOG_FORMAT still wins, so either format can be forced in any environment.
 	defaultLogFormat := "json"
 	if env == "development" {
 		defaultLogFormat = "text"
@@ -87,32 +84,21 @@ func getenv(key, fallback string) string {
 func main() {
 	resolveBuildInfo()
 
-	// Load .env before reading config so local dev can supply secrets (auth,
-	// Sentry, etc.) via the file. In prod, docker-compose injects these as real
-	// env vars and there is no .env for the Go process, so Load is a silent no-op.
+	// Load .env before reading config so local dev can supply secrets (auth, Sentry, etc.) via the file. In prod, docker-compose injects these as real env vars and there is no .env for the Go process, so Load is a silent no-op.
 	_ = godotenv.Load()
 	cfg := loadConfig()
 
-	// One logger powers everything: httplog uses it for per-request summaries,
-	// and slog.SetDefault routes startup/shutdown/DB logs through the same
-	// JSON-to-stdout pipeline. Concise mode emits exactly one summary line per
-	// request (no separate request/response pair) to keep log volume — and the
-	// BetterStack bill — minimal.
+	// One logger powers everything: httplog uses it for per-request summaries, and slog.SetDefault routes startup/shutdown/DB logs through the same JSON-to-stdout pipeline. Concise mode emits exactly one summary line per request (no separate request/response pair) to keep log volume — and the BetterStack bill — minimal.
 	logger := httplog.NewLogger("drinkwater-backend", httplog.Options{
 		JSON:             cfg.logJSON,
 		LogLevel:         cfg.logLevel,
 		Concise:          true,
 		MessageFieldName: "msg",
-		// Health probes are hit constantly by the deploy agent and uptime
-		// monitor; quiet them so they don't drown the logs.
+		// Health probes are hit constantly by the deploy agent and uptime monitor; quiet them so they don't drown the logs.
 		QuietDownRoutes: []string{"/healthz", "/readyz", "/health"},
 		QuietDownPeriod: 1 * time.Hour,
 	})
-	// Base attributes ride on every line (request summaries, startup, DB) so a
-	// log aggregator can filter by env/version/commit/pid. We attach them here
-	// rather than via httplog's Tags option, which it drops in Concise mode.
-	// In local text mode we skip them to keep each line short and readable —
-	// they only earn their keep when logs are shipped somewhere queryable.
+	// Base attributes ride on every line (request summaries, startup, DB) so a log aggregator can filter by env/version/commit/pid. We attach them here rather than via httplog's Tags option, which it drops in Concise mode. In local text mode we skip them to keep each line short and readable — they only earn their keep when logs are shipped somewhere queryable.
 	if cfg.logJSON {
 		logger.Logger = logger.Logger.With(
 			"env", cfg.env,
@@ -123,10 +109,7 @@ func main() {
 	}
 	slog.SetDefault(logger.Logger)
 
-	// Configure authentication. Drinkwater no longer signs tokens; the central
-	// identity service is the sole issuer. We fetch its public keys (JWKS) and
-	// verify incoming EdDSA tokens against them. Fail fast if the JWKS is
-	// unreachable at startup so we never boot an instance that cannot authenticate.
+	// Configure authentication. The central identity service is the sole token issuer. We fetch its public keys (JWKS) and verify incoming EdDSA tokens against them. Fail fast if the JWKS is unreachable at startup so we never boot an instance that cannot authenticate.
 	authCtx, authCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	if err := auth.Init(authCtx, cfg.jwksURL, cfg.authIssuer); err != nil {
 		slog.Error("failed to initialise token verification", "error", err, "jwks_url", cfg.jwksURL)
@@ -136,8 +119,7 @@ func main() {
 
 	database.Connect()
 
-	// Sentry captures stack traces, groups errors, and alerts. With an empty DSN
-	// it is a no-op, so local dev needs no Sentry account.
+	// Sentry captures stack traces, groups errors, and alerts. With an empty DSN it is a no-op, so local dev needs no Sentry account.
 	if cfg.sentryDSN != "" {
 		if err := sentry.Init(sentry.ClientOptions{
 			Dsn:              cfg.sentryDSN,
@@ -154,28 +136,14 @@ func main() {
 
 	router := chi.NewRouter()
 
-	// Middleware order is outer -> inner. RealIP feeds httplog/Sentry; httplog
-	// wraps everything so it records the final status (incl. the 500 written by
-	// Recoverer). Sentry sits inside Recoverer with Repanic:true so a panic is
-	// captured-with-stacktrace and then re-panicked up to Recoverer, which turns
-	// it into a clean 500.
+	// Middleware order is outer -> inner. RealIP feeds httplog/Sentry; httplog wraps everything so it records the final status (incl. the 500 written by Recoverer). Sentry sits inside Recoverer with Repanic:true so a panic is captured-with-stacktrace and then re-panicked up to Recoverer, which turns it into a clean 500.
 	//
-	// We deliberately do NOT register middleware.RequestID ourselves: httplog's
-	// RequestLogger already chains it internally and logs that id as "requestID".
-	// Adding our own would assign a *different* id (advancing the counter twice
-	// per request), so the id we echo to the client wouldn't match the logged one.
+	// We deliberately do NOT register middleware.RequestID ourselves: httplog's RequestLogger already chains it internally and logs that id as "requestID". Adding our own would assign a *different* id (advancing the counter twice per request), so the id we echo to the client wouldn't match the logged one.
 
 	router.Use(httplog.RequestLogger(logger))
-	// Echo the request id onto the response so the frontend can show it to users
-	// for support reports. This runs *after* RequestLogger so it reads the exact
-	// id httplog generated and logged as "requestID" — keeping the user-visible
-	// code and the log line in lockstep. chi's RequestID middleware only stashes
-	// the id in the context; it never writes a response header, so we do it here.
+	// Echo the request id onto the response so the frontend can show it to users for support reports. This runs *after* RequestLogger so it reads the exact id httplog generated and logged as "requestID" — keeping the user-visible code and the log line in lockstep. chi's RequestID middleware only stashes the id in the context; it never writes a response header, so we do it here.
 	router.Use(echoRequestID)
-	// Development only: attach the request body to each request summary so you can
-	// see exactly what the client sent. Bodies can carry user data, so this never
-	// runs in staging/prod. It must sit inside RequestLogger, which puts the log
-	// entry into the request context for LogEntrySetField to find.
+	// Development only: attach the request body to each request summary so you can see exactly what the client sent. Bodies can carry user data, so this never runs in staging/prod. It must sit inside RequestLogger, which puts the log entry into the request context for LogEntrySetField to find.
 	if cfg.env == "development" {
 		router.Use(devRequestBodyLogger)
 	}
@@ -186,29 +154,18 @@ func main() {
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
-		// Surface the per-request id (written by echoRequestID above) to the browser.
-		// Browsers hide non-simple response headers from JS unless they're explicitly
-		// exposed; without this the frontend can't read the id to show users for
-		// support reports.
+		// Surface the per-request id (written by echoRequestID above) to the browser. Browsers hide non-simple response headers from JS unless they're explicitly exposed; without this the frontend can't read the id to show users for support reports.
 		ExposedHeaders: []string{"X-Request-Id"},
 	}))
 
-	// Liveness vs readiness: /healthz proves the process runs; /readyz proves it
-	// can reach NeonDB (the deploy agent gates blue-green cutover on it).
+	// Liveness vs readiness: /healthz proves the process runs; /readyz proves it can reach NeonDB (the deploy agent gates blue-green cutover on it).
 	router.Get("/healthz", handlers.Healthz)
 	router.Get("/readyz", handlers.Readyz)
 	router.Get("/health", handlers.Healthz) // legacy alias
 
-	// Login (requesting and verifying a code) now lives in the central identity
-	// service, not here — Drinkwater only verifies the tokens it issues. So there
-	// are no public /auth/* endpoints anymore; the client points its login flow at
-	// the identity service and sends the resulting bearer token to the routes below.
+	// Login (requesting and verifying a code) lives in the central identity service, not here — Drinkwater only verifies the tokens it issues. There are no public /auth/* endpoints; the client points its login flow at the identity service and sends the resulting bearer token to the routes below.
 
-	// Everything that touches a user's data sits behind RequireAuth, which rejects
-	// requests without a valid bearer token and injects the user id downstream.
-	// The client-facing API is versioned under /v1 (matching the identity service),
-	// so a future breaking change can ship as /v2 without disturbing old clients.
-	// Operational probes (/healthz, /readyz, /health) stay unversioned at the root.
+	// Everything that touches a user's data sits behind RequireAuth, which rejects requests without a valid bearer token and injects the user id downstream. The client-facing API is versioned under /v1 (matching the identity service), so a future breaking change can ship as /v2 without disturbing old clients. Operational probes (/healthz, /readyz, /health) stay unversioned at the root.
 	router.Route("/v1", func(r chi.Router) {
 		r.Use(auth.RequireAuth)
 		r.Get("/auth/me", handlers.GetMe)
@@ -218,16 +175,14 @@ func main() {
 		r.Put("/settings", handlers.PutSettings)
 	})
 
-	// Cancel the base context on SIGINT/SIGTERM so the server drains in-flight
-	// requests cleanly during a blue-green cutover instead of dropping them.
+	// Cancel the base context on SIGINT/SIGTERM so the server drains in-flight requests cleanly during a blue-green cutover instead of dropping them.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.port,
 		Handler: router,
-		// Bound how long a client may take to send request headers so a slow or
-		// stalled connection cannot tie up a goroutine indefinitely (Slowloris).
+		// Bound how long a client may take to send request headers so a slow or stalled connection cannot tie up a goroutine indefinitely (Slowloris).
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -252,9 +207,7 @@ func main() {
 	slog.Info("server stopped")
 }
 
-// resolveBuildInfo backfills empty ldflags-injected build vars from the Go
-// toolchain's embedded VCS stamp, so a binary built with a plain `go build`
-// still reports its commit and dirtiness.
+// resolveBuildInfo backfills empty ldflags-injected build vars from the Go toolchain's embedded VCS stamp, so a binary built with a plain `go build` still reports its commit and dirtiness.
 func resolveBuildInfo() {
 	bi, ok := debug.ReadBuildInfo()
 	if !ok {
@@ -283,20 +236,13 @@ func resolveBuildInfo() {
 	}
 }
 
-// devRequestBodyLogger reads the request body, attaches it to the httplog entry
-// as "requestBody", and restores the body so downstream handlers still receive it
-// intact. It is wired up only in development — we deliberately keep request bodies
-// out of staging/prod logs since they can contain user data. The body is capped at
-// maxBodyLog bytes in the log so a large sync payload can't flood the console; the
-// handler always gets the full, untruncated body via the MultiReader below.
+// devRequestBodyLogger reads the request body, attaches it to the httplog entry as "requestBody", and restores the body so downstream handlers still receive it intact. It is wired up only in development — we deliberately keep request bodies out of staging/prod logs since they can contain user data. The body is capped at maxBodyLog bytes in the log so a large sync payload can't flood the console; the handler always gets the full, untruncated body via the MultiReader below.
 func devRequestBodyLogger(next http.Handler) http.Handler {
 	const maxBodyLog = 4 << 10 // 4 KiB
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Body != nil && r.ContentLength != 0 {
-			// Read up to the cap (+1 byte to detect truncation) without consuming
-			// the rest, then splice the buffered prefix back in front of whatever
-			// is left so the handler sees the complete body.
+			// Read up to the cap (+1 byte to detect truncation) without consuming the rest, then splice the buffered prefix back in front of whatever is left so the handler sees the complete body.
 			prefix, err := io.ReadAll(io.LimitReader(r.Body, maxBodyLog+1))
 			if err == nil {
 				r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(prefix), r.Body))
@@ -312,12 +258,7 @@ func devRequestBodyLogger(next http.Handler) http.Handler {
 	})
 }
 
-// echoRequestID copies the chi request id into the X-Request-Id response header.
-// It must run after httplog.RequestLogger (which internally runs middleware.RequestID
-// and logs the id as "requestID") so the header carries the exact same id — letting
-// support cross-reference a code the user reports against the exact log line. The
-// header is set before the handler writes the body, so it survives even on error
-// responses.
+// echoRequestID copies the chi request id into the X-Request-Id response header. It must run after httplog.RequestLogger (which internally runs middleware.RequestID and logs the id as "requestID") so the header carries the exact same id — letting support cross-reference a code the user reports against the exact log line. The header is set before the handler writes the body, so it survives even on error responses.
 func echoRequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
