@@ -1,12 +1,8 @@
 name: Desktop CI
 
-# Validation gate for the Tauri desktop shell's Rust side on every PR/main push.
-# Runs: cargo fmt, cargo clippy (validates Rust compiles and is formatted).
+# Validation gate for the Tauri desktop shell's Rust side on every PR/main push. Runs: cargo fmt, cargo clippy (validates Rust compiles and is formatted).
 #
-# The desktop app bundles SolidJS (web-desktop/src/) + Tauri Rust (src-tauri/).
-# The SolidJS side is validated separately by ci-web.yml. This workflow covers
-# only the Rust side, so a desktop-only break (Rust that won't compile or is
-# unformatted) is caught on the PR instead of at release time.
+# The desktop app bundles SolidJS (web-desktop/src/) + Tauri Rust (src-tauri/). The SolidJS side is validated separately by ci-web.yml. This workflow covers only the Rust side, so a desktop-only break (Rust that won't compile or is unformatted) is caught on the PR instead of at release time.
 #
 # Does NOT build the installer (that's cd-desktop.yml, on tags).
 

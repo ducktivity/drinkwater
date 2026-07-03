@@ -1,47 +1,26 @@
 name: Desktop Release
 
-# Builds the Tauri Windows desktop app and publishes a GitHub Release with the
-# installer + signed update artifacts attached. This is the distribution track:
-# the published Release is what the public downloads from, and the auto-updater
-# (tauri-plugin-updater) reads `latest.json` from the latest Release to push
-# smooth in-app updates to installed copies.
+# Builds the Tauri Windows desktop app and publishes a GitHub Release with the installer + signed update artifacts attached. This is the distribution track: the published Release is what the public downloads from, and the auto-updater (tauri-plugin-updater) reads `latest.json` from the latest Release to push smooth in-app updates to installed copies.
 #
 # Two ways in:
-#   1. Automated (normal path): after Backend CD succeeds on main, the `decide`
-#      job reads the desktop version from web-desktop/package.json. If that
-#      version has no tag yet, it publishes the release and tauri-action creates
-#      the vX.Y.Z tag. If the version is already released, every job is skipped
-#      and the run finishes green (no failure). This mirrors cd-web.yml so the
-#      backend goes live first, then web and desktop publish off the verified
-#      commit. Bump the version with `pnpm run release <version>`, commit, merge.
-#   2. Manual (fallback): push a version tag like `v1.2.3` directly to force a
-#      desktop-only release, bypassing the backend gate.
+#   1. Automated (normal path): on push to main — the SAME event that starts Backend CD and Web Deploy — the `decide` job reads the desktop version from web-desktop/package.json. If that version has no tag yet, it publishes the release and tauri-action creates the vX.Y.Z tag. If the version is already released, every job is skipped and the run finishes green (no failure). This fires alongside the backend and web, not chained after the backend. Bump the version with `pnpm run release <version>`, commit, merge.
+#   2. Manual (fallback): push a version tag like `v1.2.3` directly to force a desktop-only release.
 
 on:
-  workflow_run:
-    workflows: ['Backend CD']
-    types: [completed]
-    branches: [main]
   push:
+    branches: [main]
     tags:
-      - 'v*'
+      - "v*"
 
 # tauri-action needs write access to create the Release and upload assets.
 permissions:
   contents: write
 
 jobs:
-
-  # The brain: works out whether to release, which tag, which commit to build,
-  # and the changelog range — for both the automated and manual paths. Every
-  # downstream job is gated on `release == 'true'`, so "already released" simply
-  # skips them (a skipped job does not fail the run).
+  # The brain: works out whether to release, which tag, which commit to build, and the changelog range — for both the automated and manual paths. Every downstream job is gated on `release == 'true'`, so "already released" simply skips them (a skipped job does not fail the run).
   decide:
     name: Decide whether to release
     runs-on: ubuntu-latest
-    # Manual tag push always proceeds; the automated path only after a green
-    # Backend CD.
-    if: github.event_name == 'push' || github.event.workflow_run.conclusion == 'success'
     outputs:
       release: ${{ steps.d.outputs.release }}
       tag: ${{ steps.d.outputs.tag }}
@@ -50,28 +29,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history + tags so the existence check is reliable. Pin to the
-          # backend-verified commit on the automated path.
+          # Full history + tags so the existence check is reliable.
           fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Decide tag, ref, and changelog range
         id: d
         env:
-          EVENT_NAME: ${{ github.event_name }}
+          # A tag push (refs/tags/v*) is the manual path; a branch push to main is the automated version-drift path.
+          REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
-          if [ "$EVENT_NAME" = "push" ]; then
-            # Manual tag push: release that exact tag. It already exists at HEAD,
-            # so the changelog uses the latest tagged section.
+          if [ "$REF_TYPE" = "tag" ]; then
+            # Manual tag push: release that exact tag. It already exists at HEAD, so the changelog uses the latest tagged section.
             echo "release=true"        >> "$GITHUB_OUTPUT"
             echo "tag=$REF_NAME"       >> "$GITHUB_OUTPUT"
             echo "ref=$REF_NAME"       >> "$GITHUB_OUTPUT"
             echo "cliff_args=--latest" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Automated path: release only if package.json's version has no tag yet.
+          # Automated path (push to main): release only if package.json's version has no tag yet.
           version=$(node -p "require('./web-desktop/package.json').version")
           tag="v$version"
           if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
@@ -92,8 +69,7 @@ jobs:
     if: needs.decide.outputs.release == 'true'
     uses: ./.github/workflows/_desktop-check.yml
 
-  # The desktop app bundles the SolidJS frontend, so it must pass the same web
-  # checks (typecheck/lint/build) as the web deploy before we ship an installer.
+  # The desktop app bundles the SolidJS frontend, so it must pass the same web checks (typecheck/lint/build) as the web deploy before we ship an installer.
   web-check:
     name: Verify web bundle before release
     needs: decide
@@ -111,8 +87,7 @@ jobs:
         with:
           # Full history + tags so git-cliff can build the changelog range.
           fetch-depth: 0
-          # The commit decided above: backend-verified SHA (automated) or the
-          # pushed tag (manual).
+          # The commit decided above: backend-verified SHA (automated) or the pushed tag (manual).
           ref: ${{ needs.decide.outputs.ref }}
 
       - uses: pnpm/action-setup@v4
@@ -128,8 +103,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # Cache the Cargo registry + the Rust build dir so repeat releases don't
-      # recompile every dependency from scratch.
+      # Cache the Cargo registry + the Rust build dir so repeat releases don't recompile every dependency from scratch.
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
         with:
@@ -139,9 +113,7 @@ jobs:
         working-directory: web-desktop
         run: pnpm install --frozen-lockfile
 
-      # Render the release notes from Conventional Commits. `decide` picked the
-      # range: --unreleased (automated, tag not created yet) or --latest (manual,
-      # tag already at HEAD).
+      # Render the release notes from Conventional Commits. `decide` picked the range: --unreleased (automated, tag not created yet) or --latest (manual, tag already at HEAD).
       - name: Generate release notes
         id: changelog
         uses: orhun/git-cliff-action@v4
@@ -152,28 +124,21 @@ jobs:
       - name: Build, sign, and publish release
         uses: tauri-apps/tauri-action@v0
         env:
-          # Provided automatically by Actions; lets tauri-action create the
-          # GitHub Release and upload the installer + latest.json.
+          # Provided automatically by Actions; lets tauri-action create the GitHub Release and upload the installer + latest.json.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Updater signing key (generated with `pnpm tauri signer generate`).
-          # The public half lives in tauri.conf.json; these two are repo secrets.
+          # Updater signing key (generated with `pnpm tauri signer generate`). The public half lives in tauri.conf.json; these two are repo secrets.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Backend URL baked into the bundle (same repo variable the web build
-          # uses). Falls back to the localhost default if unset.
+          # Backend URL baked into the bundle (same repo variable the web build uses). Falls back to the localhost default if unset.
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
         with:
           # Run Tauri from the frontend project root.
           projectPath: web-desktop
-          # Name the Release after the decided tag. On the automated path
-          # tauri-action creates this tag as part of publishing. __VERSION__ is
-          # substituted by tauri-action from tauri.conf.json.
+          # Name the Release after the decided tag. On the automated path tauri-action creates this tag as part of publishing. __VERSION__ is substituted by tauri-action from tauri.conf.json.
           tagName: ${{ needs.decide.outputs.tag }}
-          releaseName: 'Drinkwater __VERSION__'
-          # Changelog generated above (cliff.toml appends the download/install
-          # footer). Falls back to a static line if git-cliff produced nothing.
+          releaseName: "Drinkwater __VERSION__"
+          # Changelog generated above (cliff.toml appends the download/install footer). Falls back to a static line if git-cliff produced nothing.
           releaseBody: ${{ steps.changelog.outputs.content || 'See the assets below to download and install. Installed copies update themselves automatically.' }}
-          # Publish immediately (not a draft) so the auto-updater can read
-          # latest.json from the "latest release" URL right away.
+          # Publish immediately (not a draft) so the auto-updater can read latest.json from the "latest release" URL right away.
           releaseDraft: false
           prerelease: false

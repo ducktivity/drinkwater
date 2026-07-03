@@ -5,10 +5,7 @@ import { cleanupSyncedStaleLogs } from './cleanup'
 import { logger } from '../logger'
 
 /**
- * The outcome of a sync attempt. `ok` is true on a successful round-trip. On a
- * backend rejection, `requestId` carries the per-request id (when the response
- * exposed one) so the UI can show the user a support code. Offline failures have
- * no response and therefore no `requestId`.
+ * The outcome of a sync attempt. `ok` is true on a successful round-trip. On a backend rejection, `requestId` carries the per-request id (when the response exposed one) so the UI can show the user a support code. Offline failures have no response and therefore no `requestId`.
  */
 export interface SyncResult {
   ok: boolean
@@ -16,17 +13,10 @@ export interface SyncResult {
 }
 
 /**
- * Pushes unsynced local logs to the backend and merges back any changes from
- * other devices. Resolves to `{ ok: true }` when the round-trip succeeds and
- * `{ ok: false }` (optionally with a `requestId`) when the request is rejected or
- * the device is offline, so callers (e.g. the manual refresh button) can reflect
- * the outcome in the UI.
+ * Pushes unsynced local logs to the backend and merges back any changes from other devices. Resolves to `{ ok: true }` when the round-trip succeeds and `{ ok: false }` (optionally with a `requestId`) when the request is rejected or the device is offline, so callers (e.g. the manual refresh button) can reflect the outcome in the UI.
  */
 export const syncEngine = async (): Promise<SyncResult> => {
-  // The single sync gate: with no session token the user has no account, so the
-  // app stays 100% local and never calls the backend. Because every sync trigger
-  // (app load, regained connectivity, after each log change) funnels through
-  // here, this one check keeps the whole client offline-only until sign-in.
+  // The single sync gate: with no session token the user has no account, so the app stays 100% local and never calls the backend. Because every sync trigger (app load, regained connectivity, after each log change) funnels through here, this one check keeps the whole client offline-only until sign-in.
   if (!getToken()) {
     return { ok: false }
   }
@@ -52,7 +42,7 @@ export const syncEngine = async (): Promise<SyncResult> => {
     }))
 
     // 3. Make the type-safe API call to our Go backend
-    const { data, error, response } = await apiClient.POST('/sync', {
+    const { data, error, response } = await apiClient.POST('/v1/sync', {
       params: {
         query: {
           since: lastSync || undefined,
@@ -69,14 +59,7 @@ export const syncEngine = async (): Promise<SyncResult> => {
 
     if (!data) return { ok: false, requestId: getRequestId(response) }
 
-    // // 4. We successfully pushed! Mark our local logs as synced
-    // if (unsyncedLogs.length > 0) {
-    //   await db.waterLogs.bulkPut(
-    //     unsyncedLogs.map((log) => ({ ...log, is_synced: 1 })),
-    //   )
-    // }
-
-    // 5. Save incoming changes from OTHER devices into our local Dexie DB
+    // 4. Save incoming changes from OTHER devices into our local Dexie DB
     if (data.changes && data.changes.length > 0) {
       const incomingLogs = data.changes.map((change) => ({
         ...change,
@@ -86,14 +69,13 @@ export const syncEngine = async (): Promise<SyncResult> => {
       await db.waterLogs.bulkPut(incomingLogs)
     }
 
-    // 6. Update our local clock to match the server's truth
+    // 5. Update our local clock to match the server's truth
     if (data.server_time) {
       localStorage.setItem('last_sync_time', data.server_time)
     }
     logger.log(`✅ Sync complete! Server time: ${data.server_time}`)
 
-    // 7. Now that local logs are confirmed on the server, drop stale (non-today)
-    // synced entries so IndexedDB doesn't accumulate data the UI never renders.
+    // 6. Now that local logs are confirmed on the server, drop stale (non-today) synced entries so IndexedDB doesn't accumulate data the UI never renders.
     const removed = await cleanupSyncedStaleLogs()
     if (removed > 0) {
       logger.log(`🧹 Cleaned up ${removed} stale synced log(s).`)
@@ -101,9 +83,7 @@ export const syncEngine = async (): Promise<SyncResult> => {
 
     return { ok: true }
   } catch (err) {
-    // If we are offline, fetch fails here. We just catch it silently.
-    // The user doesn't care, they are local-first! No response means no request
-    // id to surface.
+    // If we are offline, fetch fails here. We just catch it silently. The user doesn't care, they are local-first! No response means no request id to surface.
     logger.warn('📶 Offline: Sync deferred until connection is restored.', err)
     return { ok: false }
   }

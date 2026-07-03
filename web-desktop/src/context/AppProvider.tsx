@@ -7,11 +7,7 @@ import { HistoryProvider } from './HistoryContext'
 import { OverlayProvider } from './OverlayContext'
 
 /**
- * Composes the app's context providers into a single wrapper. The nesting order
- * matters: each provider may consume the ones above it (Toast is outermost so
- * any provider can raise notifications; Auth sits high so its sign-in can drive
- * sync; Hydration reads Settings, History reads Hydration, Overlay reads Settings
- * and Hydration), so they must stay in this order.
+ * Composes the app's context providers into a single wrapper. The nesting order matters: each provider may consume the ones above it (Toast is outermost so any provider can raise notifications; Auth sits high so its sign-in can drive sync; Hydration reads Settings, History reads Hydration, Overlay reads Settings and Hydration), so they must stay in this order.
  */
 export function AppProvider(props: ParentProps) {
   return (

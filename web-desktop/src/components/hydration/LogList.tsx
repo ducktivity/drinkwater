@@ -4,11 +4,7 @@ import { useHistory } from '../../context/HistoryContext'
 import { useOverlay } from '../../context/OverlayContext'
 
 /**
- * Renders the selected day's individual hydration log entries with edit/delete
- * controls. Reads the entries (today's live logs or a fetched past day) from the
- * history context and routes edit/delete/add intents through the overlay
- * context. On past days it also offers an "Add log" button to back-fill a
- * forgotten entry; today's logs are captured through the bottle instead.
+ * Renders the selected day's individual hydration log entries with edit/delete controls. Reads the entries (today's live logs or a fetched past day) from the history context and routes edit/delete/add intents through the overlay context. On past days it also offers an "Add log" button to back-fill a forgotten entry; today's logs are captured through the bottle instead.
  */
 export function LogList() {
   const history = useHistory()

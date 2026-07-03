@@ -10,8 +10,7 @@ RUN go mod download
 
 COPY . .
 
-# Build metadata, supplied by docker-compose / CI from git. Injected into the
-# binary via -ldflags so logs and Sentry report the exact running commit.
+# Build metadata, supplied by docker-compose / CI from git. Injected into the binary via -ldflags so logs and Sentry report the exact running commit.
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
@@ -23,11 +22,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o /out/drinkwater ./
 
 # ---- Runtime stage ----
-# distroless/static ships CA certificates (needed for outbound TLS to NeonDB and
-# Sentry) and runs as a non-root user, with no shell or package manager.
+# distroless/static ships CA certificates (needed for outbound TLS to NeonDB and Sentry) and runs as a non-root user, with no shell or package manager.
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /app
 COPY --from=build /out/drinkwater /app/drinkwater
-EXPOSE 8080
+EXPOSE 8001
 USER nonroot:nonroot
 ENTRYPOINT ["/app/drinkwater"]

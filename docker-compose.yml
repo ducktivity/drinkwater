@@ -1,17 +1,9 @@
 # Minimal starter stack for local/early deployment.
 #
-# The full topology in docs/architecture.md §6/§7 (cloudflared outbound tunnel +
-# app-blue/app-green colors + on-box deploy agent) layers on top of this. The
-# single `app` service here stands in for a live color; Vector selects app
-# containers by label, so it will pick up the blue/green pair unchanged once they
-# exist. No Loki/Grafana/Alloy: log storage, search, and retention live in
-# BetterStack, off-box.
+# The full topology in docs/architecture.md §6/§7 (cloudflared outbound tunnel + app-blue/app-green colors + on-box deploy agent) layers on top of this. The single `app` service here stands in for a live color; Vector selects app containers by label, so it will pick up the blue/green pair unchanged once they exist. No Loki/Grafana/Alloy: log storage, search, and retention live in BetterStack, off-box.
 services:
   app:
-    # On the box we PULL this prebuilt image (CI publishes it to GHCR). For local
-    # dev you can instead build from ./backend via the build: block below; `docker
-    # compose build` tags the result with this same name. IMAGE_TAG lets you pin a
-    # specific sha-<gitsha> (e.g. for rollback); it defaults to the moving `latest`.
+    # On the box we PULL this prebuilt image (CI publishes it to GHCR). For local dev you can instead build from ./backend via the build: block below; `docker compose build` tags the result with this same name. IMAGE_TAG lets you pin a specific sha-<gitsha> (e.g. for rollback); it defaults to the moving `latest`.
     image: ghcr.io/ducktivity/drinkwater-backend:${IMAGE_TAG:-latest}
     build:
       context: ./backend
@@ -23,30 +15,24 @@ services:
       ENV: ${ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-json}
-      PORT: "8080"
+      PORT: "8001"
       DATABASE_URL: ${DATABASE_URL}
       SENTRY_DSN: ${SENTRY_DSN:-}
-      # Comma-separated extra CORS origins (e.g. the Cloudflare Pages frontend
-      # hostname). Appended to the localhost/Tauri dev defaults in main.go.
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
-      # Email-OTP auth. AUTH_JWT_SECRET is REQUIRED outside dev (signs session
-      # JWTs + peppers login codes). RESEND_API_KEY empty => login codes are
-      # logged instead of emailed. AUTH_EMAIL_FROM empty => main.go's default.
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-}
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
-      AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM:-}
-    # Publish only to the box's loopback: handy for on-box `curl`/debugging, never
-    # reachable from outside (defense-in-depth on top of the closed firewall).
-    # cloudflared reaches the app over the private Compose network (http://app:8080),
-    # not through this mapping. docs/architecture.md §6: no public inbound ports.
-    # For pure local dev you can change this back to "8080:8080".
+      # Token verification. Drinkwater verifies (does not sign) tokens minted by the central identity service, fetching its public keys from JWKS_URL. AUTH_ISSUER must match the tokens' "iss" claim. No signing secret or email key lives here.
+      JWKS_URL: ${JWKS_URL:-http://localhost:8000/.well-known/jwks.json}
+      AUTH_ISSUER: ${AUTH_ISSUER:-http://localhost:8000}
+    # Publish only to the box's loopback: handy for on-box `curl`/debugging, never reachable from outside (defense-in-depth on top of the closed firewall). The shared edge cloudflared reaches the app over the ducktivity_edge network via the drinkwater-backend alias, not through this mapping. §6: no public inbound. For pure local dev you can change this to "8001:8001".
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8001:8001"
+    # Attach to the suite's shared edge network so the shared cloudflared (edge stack) can route drinkwater.ducktvt.com -> drinkwater-backend:8001. Unique alias per app.
+    networks:
+      ducktivity_edge:
+        aliases:
+          - drinkwater-backend
     labels:
       # Vector's docker_logs source tails only containers carrying this label.
       collect_logs: "true"
-    # Bound the local log buffer. Vector ships from these files and BetterStack
-    # owns long-term retention, so a few rotated files is all the box keeps.
+    # Bound the local log buffer. Vector ships from these files and BetterStack owns long-term retention, so a few rotated files is all the box keeps.
     logging:
       driver: json-file
       options:
@@ -54,49 +40,9 @@ services:
         max-file: "3"
     restart: unless-stopped
 
-  # Cloudflare Tunnel: the box's ONLY ingress. cloudflared dials OUT to the
-  # Cloudflare edge and forwards public traffic for your hostname down the tunnel
-  # to app:8080 over the private Compose network, so NO inbound port is opened on
-  # the box (docs/architecture.md §6). The public-hostname -> service mapping is
-  # configured in the Cloudflare Zero Trust dashboard for this named tunnel; the
-  # token below is the only delivery secret the box needs.
-  cloudflared:
-    image: cloudflare/cloudflared:latest # pin to a specific version/digest in prod
-    command: tunnel --no-autoupdate run
-    environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
-    # Let the containerized tunnel reach services on the HOST — specifically the
-    # host's sshd on :22, so Cloudflare Access can broker SSH over the same tunnel
-    # (docs/architecture.md §6 "private admin access"). The SSH public hostname's
-    # service URL is ssh://host.docker.internal:22.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      - app
-    restart: unless-stopped
+  # This stack runs only the app. The shared edge stack (../edge) provides ingress + Access SSH via its cloudflared connector, and its vector ships this app's logs (it tails the collect_logs label above).
 
-  vector:
-    # Pin to a digest in production; `-alpine` keeps the shipper tiny (~30-60MB).
-    image: timberio/vector:0.44.0-alpine
-    # Watch the mounted config and hot-reload on change. Without this, Vector reads
-    # vector.yaml only at startup; since the config is a bind-mounted file, editing
-    # it does NOT make `docker compose up -d` recreate the container, so changes
-    # silently never take effect until a manual `restart vector`. --watch-config
-    # closes that gap so a vector.yaml edit applies on its own.
-    command: ["--watch-config", "--config", "/etc/vector/vector.yaml"]
-    depends_on:
-      - app
-    environment:
-      BETTERSTACK_SOURCE_TOKEN: ${BETTERSTACK_SOURCE_TOKEN:-}
-      BETTERSTACK_INGEST_HOST: ${BETTERSTACK_INGEST_HOST:-https://in.logs.betterstack.com}
-    volumes:
-      - ./deploy/vector/vector.yaml:/etc/vector/vector.yaml:ro
-      # Read-only Docker socket so docker_logs can tail sibling containers.
-      # Egress is outbound-only to BetterStack; nothing listens inbound.
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Persist the disk buffer so a BetterStack outage doesn't drop logs.
-      - vector_data:/var/lib/vector
-    restart: unless-stopped
-
-volumes:
-  vector_data:
+networks:
+  # Shared suite ingress network, created and owned by the edge stack (../edge). `docker network create ducktivity_edge` if it does not exist yet.
+  ducktivity_edge:
+    external: true

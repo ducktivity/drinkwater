@@ -16,9 +16,7 @@ import { TimeInput } from '../ui/TimeInput'
 const DEFAULT_AMOUNT_ML = 250
 
 /**
- * Modal dialog for adding a hydration log to a past day the user forgot to
- * record. Mirrors EditLogDialog's layout but composes a brand-new entry on the
- * selected calendar day from the chosen time-of-day and amount.
+ * Modal dialog for adding a hydration log to a past day the user forgot to record. Mirrors EditLogDialog's layout but composes a brand-new entry on the selected calendar day from the chosen time-of-day and amount.
  */
 export function AddLogDialog() {
   const overlay = useOverlay()
@@ -30,8 +28,7 @@ export function AddLogDialog() {
   )
 
   /**
-   * Adds a back-filled log to the selected (past) day: writes a new unsynced
-   * entry to IndexedDB, reflects it in the history list, and kicks off a sync.
+   * Adds a back-filled log to the selected (past) day: writes a new unsynced entry to IndexedDB, reflects it in the history list, and kicks off a sync.
    */
   async function handleSave() {
     const newLog: LocalWaterLog = {

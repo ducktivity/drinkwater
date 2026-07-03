@@ -6,16 +6,14 @@ cd "$(dirname "$0")/.." # Always run from the backend root
 COMMAND=$1
 if [ -z "$COMMAND" ]; then
   echo "❌ Error: You must provide a migration command (e.g., up, down, status)"
-  echo "Usage: ./scripts/migrate.sh up"
+  echo "Usage: ./scripts/db-migrate.sh up"
   exit 1
 fi
 
 # 2. Extract the DATABASE_URL from the .env file if it exists
-DB_URL="postgres://postgres:postgres@localhost:5432/drinkwater?sslmode=disable" # Default fallback
+DB_URL="postgres://postgres:postgres@localhost:5432/ducktivity?sslmode=disable&options=-c%20search_path%3Ddrinkwater" # Default fallback
 if [ -f .env ]; then
-  # This clever line reads the .env file and extracts the DATABASE_URL specifically
-  # Strip only up to the FIRST '=' so values that themselves contain '='
-  # (e.g. a Neon URL ending in '?sslmode=require') survive intact.
+  # Extract DATABASE_URL from .env, stripping only up to the FIRST '=' so values that themselves contain '=' (e.g. a Neon URL ending in '?sslmode=require') survive intact.
   ENV_URL=$(grep -v '^#' .env | grep -e "DATABASE_URL" | sed -e 's/^[^=]*=//')
   if [ ! -z "$ENV_URL" ]; then
     DB_URL=$ENV_URL

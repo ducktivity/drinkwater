@@ -25,12 +25,11 @@ import (
 // @Success      200     {object}  api.SyncResponse "Successful sync response containing delta changes"
 // @Failure      400     {object}  map[string]string "Invalid request body"
 // @Failure      500     {object}  map[string]string "Internal server or database error"
-// @Router       /sync [post]
+// @Router       /v1/sync [post]
 func PostSync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// The acting user comes from the verified bearer token (RequireAuth, which
-	// also stamps the request-summary line with this id).
+	// The acting user comes from the verified bearer token (RequireAuth, which also stamps the request-summary line with this id).
 	userID, ok := auth.UserIDFromContext(ctx)
 	if !ok {
 		// RequireAuth guarantees a user; guard so a routing mistake fails closed.
@@ -98,14 +97,7 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// Initial sync: the client has no sync token yet and its UI only ever
-		// renders today's logs (older entries get pruned from IndexedDB), so we
-		// bootstrap just the recent records rather than the full history. We lack
-		// the client's timezone, so we widen the window to the UTC day ±1: a
-		// client's local "today" can fall on the previous or next UTC day (offsets
-		// span UTC-12..UTC+14), and this guarantees we capture every log that
-		// could be today for them. The client re-prunes anything outside its own
-		// local day right after syncing.
+		// Initial sync: the client has no sync token yet and its UI only ever renders today's logs (older entries get pruned from IndexedDB), so we bootstrap just the recent records rather than the full history. We lack the client's timezone, so we widen the window to the UTC day ±1: a client's local "today" can fall on the previous or next UTC day (offsets span UTC-12..UTC+14), and this guarantees we capture every log that could be today for them. The client re-prunes anything outside its own local day right after syncing.
 		startOfDay := time.Date(serverNow.Year(), serverNow.Month(), serverNow.Day(), 0, 0, 0, 0, time.UTC)
 		windowStart := startOfDay.AddDate(0, 0, -1)
 		windowEnd := startOfDay.AddDate(0, 0, 2)
@@ -138,8 +130,7 @@ func PostSync(w http.ResponseWriter, r *http.Request) {
 		outgoingLogs = append(outgoingLogs, api.WaterLog{
 			ID:       dbLog.ID,
 			AmountMl: dbLog.AmountMl,
-			// Always emit UTC so the wire format is canonical ("...Z"), matching
-			// the client and keeping the same instant byte-identical everywhere.
+			// Always emit UTC so the wire format is canonical ("...Z"), matching the client and keeping the same instant byte-identical everywhere.
 			LoggedAt:  dbLog.LoggedAt.Time.UTC(),
 			IsDeleted: dbLog.IsDeleted,
 		})

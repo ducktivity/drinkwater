@@ -8,14 +8,14 @@
     },
     "basePath": "/",
     "paths": {
-        "/auth/me": {
+        "/v1/auth/me": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the account for the supplied bearer token. Used by clients to validate a stored token on startup.",
+                "description": "Returns the account for the supplied bearer token, read straight from the verified token claims. Used by clients to validate a stored token on startup.",
                 "produces": [
                     "application/json"
                 ],
@@ -38,144 +38,13 @@
                                 "type": "string"
                             }
                         }
-                    },
-                    "500": {
-                        "description": "Internal server or database error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
                     }
                 }
             }
         },
-        "/auth/request": {
-            "post": {
-                "description": "Sends a 6-digit login code to the given email, creating the account if it does not yet exist. Always returns a generic acknowledgement so the endpoint cannot be used to probe which emails have accounts.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
-                "summary": "Request a login code",
-                "parameters": [
-                    {
-                        "description": "Email to send the login code to",
-                        "name": "payload",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/api.AuthRequestInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Generic acknowledgement",
-                        "schema": {
-                            "$ref": "#/definitions/api.MessageResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request body or email",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "429": {
-                        "description": "A code was requested too recently",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server or database error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/auth/verify": {
-            "post": {
-                "description": "Exchanges a valid email + 6-digit code for a 30-day session token. Wrong guesses are capped per code; a successful verification consumes the code so it cannot be reused.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
-                "summary": "Verify a login code",
-                "parameters": [
-                    {
-                        "description": "Email and the 6-digit code",
-                        "name": "payload",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/api.AuthVerifyInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Session token and the authenticated user",
-                        "schema": {
-                            "$ref": "#/definitions/api.AuthResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request body or email",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Code is wrong, expired, used up, or locked",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server or database error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/logs": {
+        "/v1/logs": {
             "get": {
-                "description": "Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are no longer cached locally.",
+                "description": "Returns the non-deleted water logs whose logged_at falls within the half-open range [from, to). The client passes the start of the selected local day and the start of the following day so day boundaries honour the client's timezone. Used to view historical days that are not cached locally.",
                 "produces": [
                     "application/json"
                 ],
@@ -227,7 +96,7 @@
                 }
             }
         },
-        "/settings": {
+        "/v1/settings": {
             "get": {
                 "security": [
                     {
@@ -343,7 +212,7 @@
                 }
             }
         },
-        "/sync": {
+        "/v1/sync": {
             "post": {
                 "description": "Pushes local changes (upserts) to the server and pulls remote changes (delta) made on other devices.",
                 "consumes": [
@@ -406,47 +275,6 @@
         }
     },
     "definitions": {
-        "api.AuthRequestInput": {
-            "type": "object",
-            "required": [
-                "email"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                }
-            }
-        },
-        "api.AuthResponse": {
-            "type": "object",
-            "required": [
-                "token",
-                "user"
-            ],
-            "properties": {
-                "token": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/api.User"
-                }
-            }
-        },
-        "api.AuthVerifyInput": {
-            "type": "object",
-            "required": [
-                "code",
-                "email"
-            ],
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                }
-            }
-        },
         "api.LogsResponse": {
             "type": "object",
             "required": [
@@ -458,17 +286,6 @@
                     "items": {
                         "$ref": "#/definitions/api.WaterLog"
                     }
-                }
-            }
-        },
-        "api.MessageResponse": {
-            "type": "object",
-            "required": [
-                "message"
-            ],
-            "properties": {
-                "message": {
-                    "type": "string"
                 }
             }
         },
@@ -542,7 +359,7 @@
     },
     "securityDefinitions": {
         "BearerAuth": {
-            "description": "Type \"Bearer\" followed by a space and the session token returned by /auth/verify.",
+            "description": "Type \"Bearer\" followed by a space and the session token issued by the identity service (id.ducktvt.com, POST /v1/auth/verify).",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"

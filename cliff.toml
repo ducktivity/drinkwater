@@ -1,12 +1,8 @@
 # git-cliff configuration.
 #
-# Renders the GitHub Release body for desktop releases from Conventional Commit
-# messages. Consumed by .github/workflows/cd-desktop.yml (via git-cliff-action),
-# which passes the rendered output to tauri-action's `releaseBody`.
+# Renders the GitHub Release body for desktop releases from Conventional Commit messages. Consumed by .github/workflows/cd-desktop.yml (via git-cliff-action), which passes the rendered output to tauri-action's `releaseBody`.
 #
-# The GitHub Release already shows the version as its title, so this template
-# intentionally omits a version heading and emits only the grouped changes
-# followed by the download/install footer.
+# The GitHub Release already shows the version as its title, so this template intentionally omits a version heading and emits only the grouped changes followed by the download/install footer.
 
 [changelog]
 body = """
@@ -25,13 +21,11 @@ header = ""
 trim = true
 
 [git]
-# Parse Conventional Commits (feat/fix/...). We mandate them, so this drives the
-# grouping below.
+# Parse Conventional Commits (feat/fix/...). We mandate them, so this drives the grouping below.
 conventional_commits = true
 # Keep non-conventional commits too (they fall through to "Other").
 filter_unconventional = false
-# Group by type, in this display order. Noise types (and the "chore: release"
-# bump commit) are skipped so the notes read like a user-facing changelog.
+# Group by type, in this display order. Noise types (and the "chore: release" bump commit) are skipped so the notes read like a user-facing changelog.
 commit_parsers = [
   {message = "^feat", group = "Features"},
   {message = "^fix", group = "Bug Fixes"},

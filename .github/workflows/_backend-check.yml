@@ -1,12 +1,9 @@
 name: Backend Check
 
-# Reusable backend verification gate: format, vet, build, test, staticcheck,
-# gosec — the same gates scripts/check.sh runs locally. It is the single source
-# of truth for "the backend is verified at this commit", called by:
+# Reusable backend verification gate: format, vet, build, test, staticcheck, gosec — the same gates scripts/check.sh runs locally. It is the single source of truth for "the backend is verified at this commit", called by:
 #   - Backend CD (cd-backend.yml) on every push/PR to main, and
 #   - Desktop Release (cd-desktop.yml) before publishing a tagged installer,
-# so a frontend artifact only ships after a verified backend (architecture.md
-# §7: deploy the frontend after the backend, never before).
+# so a frontend artifact only ships after a verified backend (architecture.md §7: deploy the frontend after the backend, never before).
 
 on:
   workflow_call:
@@ -47,9 +44,7 @@ jobs:
       - name: go test
         run: go test ./...
 
-      # staticcheck via its official action (by Staticcheck's own author). It
-      # supports working-directory, so it cleanly targets our backend submodule.
-      # install-go: false reuses the Go set up above instead of installing twice.
+      # staticcheck via its official action (by Staticcheck's own author). It supports working-directory, so it cleanly targets our backend submodule. install-go: false reuses the Go set up above instead of installing twice.
       - name: staticcheck
         uses: dominikh/staticcheck-action@v1
         with:
@@ -57,21 +52,11 @@ jobs:
           install-go: false
           working-directory: backend
 
-      # gosec is pinned in go.mod (go tool), matching scripts/check.sh. We do not
-      # use securego/gosec's official action: it is a Docker container action with
-      # only an `args` input and always runs at the repo root, so it cannot target
-      # a Go module that lives in a subdirectory (our module is backend/).
+      # gosec is pinned in go.mod (go tool), matching scripts/check.sh. We do not use securego/gosec's official action: it is a Docker container action with only an `args` input and always runs at the repo root, so it cannot target a Go module that lives in a subdirectory (our module is backend/).
       - name: gosec
         run: go tool gosec -quiet ./...
 
-      # Generated-artifact drift check (architecture.md §7). The OpenAPI spec
-      # (shared-schemas/swagger.json) and the sqlc Go code (database/dbgen) are
-      # the committed output of generators driven off the DB schema/queries —
-      # the SSOT pipeline. Re-run those generators and assert the working tree is
-      # unchanged: a non-empty diff means someone edited the schema or queries
-      # without regenerating, so the committed artifacts have drifted. This is a
-      # check only — it fails the job rather than committing the regenerated
-      # files. swag and sqlc are the same go-tool versions scripts/check.sh uses.
+      # Generated-artifact drift check (architecture.md §7). The OpenAPI spec (shared-schemas/swagger.json) and the sqlc Go code (database/dbgen) are the committed output of generators driven off the DB schema/queries — the SSOT pipeline. Re-run those generators and assert the working tree is unchanged: a non-empty diff means someone edited the schema or queries without regenerating, so the committed artifacts have drifted. This is a check only — it fails the job rather than committing the regenerated files. swag and sqlc are the same go-tool versions scripts/check.sh uses.
       - name: Generated-artifact drift (swagger + sqlc)
         run: |
           ./scripts/export-swagger.sh

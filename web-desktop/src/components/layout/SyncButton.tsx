@@ -6,11 +6,7 @@ import { useToast } from '../../context/ToastContext'
 const SYNCED_FEEDBACK_MS = 1000
 
 /**
- * A manual sync control. Tapping it pushes the current bottle state to the
- * backend: the refresh icon spins while syncing, then briefly becomes a green
- * checkmark on success before returning to the idle refresh icon. Repeated taps
- * are ignored while a sync is already in flight. Runs the sync itself and
- * surfaces a toast on failure, distinguishing being offline from a real error.
+ * A manual sync control. Tapping it pushes the current bottle state to the backend: the refresh icon spins while syncing, then briefly becomes a green checkmark on success before returning to the idle refresh icon. Repeated taps are ignored while a sync is already in flight. Runs the sync itself and surfaces a toast on failure, distinguishing being offline from a real error.
  */
 export function SyncButton() {
   const toast = useToast()
@@ -18,8 +14,7 @@ export function SyncButton() {
     'idle',
   )
 
-  // Tracks the pending "synced → idle" timer so we can clear it if the
-  // component unmounts mid-feedback.
+  // Tracks the pending "synced → idle" timer so we can clear it if the component unmounts mid-feedback.
   let revertTimer: ReturnType<typeof setTimeout> | undefined
 
   async function handleClick() {
@@ -40,8 +35,7 @@ export function SyncButton() {
           'info',
         )
       } else {
-        // Attach the request id (when the backend exposed one) so the user can
-        // report a precise support code.
+        // Attach the request id (when the backend exposed one) so the user can report a precise support code.
         toast.showToast(
           'Sync failed. Please try again.',
           'error',

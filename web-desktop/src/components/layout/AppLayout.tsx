@@ -7,10 +7,7 @@ import { Navbar } from './Navbar'
 import { SettingsDrawer } from '../settings/SettingsDrawer'
 
 /**
- * The app shell: a top navbar (brand + sync + settings), the focused hydration
- * card (date, stats, goal banner, bottle), the history log list, and the
- * slide-over settings drawer. Every section pulls its own state from context,
- * so the shell only arranges them — it threads no props through.
+ * The app shell: a top navbar (brand + sync + settings), the focused hydration card (date, stats, goal banner, bottle), the history log list, and the slide-over settings drawer. Every section pulls its own state from context, so the shell only arranges them — it threads no props through.
  */
 export function AppLayout() {
   return (

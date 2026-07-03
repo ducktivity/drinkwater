@@ -14,8 +14,7 @@ export interface Toast {
   /** `error` for failures, `info` for neutral status like being offline. */
   type: 'error' | 'info'
   /**
-   * Optional backend request id for a failed request. When set, the toast shows
-   * it as a copyable support code the user can report.
+   * Optional backend request id for a failed request. When set, the toast shows it as a copyable support code the user can report.
    */
   requestId?: string
 }
@@ -24,8 +23,7 @@ interface ToastContextValue {
   /** The toasts currently on screen, oldest first. */
   toasts: Accessor<Toast[]>
   /**
-   * Queues a toast; it auto-dismisses after a few seconds. Pass `requestId` to
-   * attach a copyable support code (e.g. from a failed backend request).
+   * Queues a toast; it auto-dismisses after a few seconds. Pass `requestId` to attach a copyable support code (e.g. from a failed backend request).
    */
   showToast: (message: string, type?: Toast['type'], requestId?: string) => void
   /** Removes a toast immediately (e.g. when the user dismisses it). */
@@ -41,8 +39,7 @@ const TOAST_LIFETIME_MS = 5000
 export function ToastProvider(props: ParentProps) {
   const [toasts, setToasts] = createSignal<Toast[]>([])
 
-  // Monotonic id source so each toast is uniquely keyed, and a registry of the
-  // pending auto-dismiss timers so we can clear them on unmount.
+  // Monotonic id source so each toast is uniquely keyed, and a registry of the pending auto-dismiss timers so we can clear them on unmount.
   let nextId = 0
   const timers = new Map<number, ReturnType<typeof setTimeout>>()
 

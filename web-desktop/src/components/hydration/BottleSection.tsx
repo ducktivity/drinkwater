@@ -31,19 +31,14 @@ const BODY_PATH = `M ${ORIGIN_X + 14} ${ORIGIN_Y + BODY_TOP} L ${ORIGIN_X + BOTT
 const NECK_PATH = `M ${NECK_ORIGIN_X} ${ORIGIN_Y + NECK_H + 4} L ${NECK_ORIGIN_X} ${ORIGIN_Y + NECK_H / 2} Q ${NECK_ORIGIN_X} ${ORIGIN_Y} ${NECK_ORIGIN_X + NECK_W / 2 - 4} ${ORIGIN_Y} L ${NECK_ORIGIN_X + NECK_W / 2 + 4} ${ORIGIN_Y} Q ${NECK_ORIGIN_X + NECK_W} ${ORIGIN_Y} ${NECK_ORIGIN_X + NECK_W} ${ORIGIN_Y + NECK_H / 2} L ${NECK_ORIGIN_X + NECK_W} ${ORIGIN_Y + NECK_H + 4} Z`
 
 /**
- * Converts a fill fraction (0–1) into the Y coordinate of the water surface
- * inside the SVG viewBox. fillFraction=1 means full (surface at BODY_TOP);
- * fillFraction=0 means empty (surface at BODY_BOT).
+ * Converts a fill fraction (0–1) into the Y coordinate of the water surface inside the SVG viewBox. fillFraction=1 means full (surface at BODY_TOP); fillFraction=0 means empty (surface at BODY_BOT).
  */
 function computeWaterSurfaceY(fillFraction: number) {
   return ORIGIN_Y + BODY_TOP + (1 - fillFraction) * BODY_H
 }
 
 /**
- * The draggable hydration bottle. Reads the active-bottle level and bottle size
- * from context and routes drag/commit gestures back through the hydration and
- * overlay contexts. On a past day it shows a static, full bottle with no
- * controls, since dragging would log against today rather than the day viewed.
+ * The draggable hydration bottle. Reads the active-bottle level and bottle size from context and routes drag/commit gestures back through the hydration and overlay contexts. On a past day it shows a static, full bottle with no controls, since dragging would log against today rather than the day viewed.
  */
 export function BottleSection() {
   const settings = useSettings()
@@ -77,8 +72,7 @@ export function BottleSection() {
   }
 
   /**
-   * Maps a pointer's clientY screen position into a 0–1 fill fraction by
-   * projecting it into SVG user-space and normalising against the bottle body height.
+   * Maps a pointer's clientY screen position into a 0–1 fill fraction by projecting it into SVG user-space and normalising against the bottle body height.
    */
   function pointerClientYToFillFraction(clientY: number) {
     const svgBounds = svgElement.getBoundingClientRect()
@@ -96,8 +90,7 @@ export function BottleSection() {
   function handleDragEnd(clientY: number) {
     if (!isDragging) return
     isDragging = false
-    // Trigger the "bottle emptied" flow when the user releases near the bottom,
-    // otherwise commit the resting level so it can fold into today's total.
+    // Trigger the "bottle emptied" flow when the user releases near the bottom, otherwise commit the resting level so it can fold into today's total.
     if (pointerClientYToFillFraction(clientY) <= 0.05) {
       overlay.handleBottleEmptied()
     } else {
@@ -254,8 +247,7 @@ export function BottleSection() {
         {bottleLevelLabel()}
       </div>
 
-      {/* Log the amount drunk so far without dragging the bottle all the way to empty.
-          Disabled until at least 1 ml has been consumed from the active bottle. */}
+      {/* Log the amount drunk so far without dragging the bottle all the way to empty. Disabled until at least 1 ml has been consumed from the active bottle. */}
       <Show when={isInteractive() && mlDrankSoFar() > 0}>
         <button
           class="px-4 py-2 rounded-[10px] border border-white/10 bg-[#222535] text-[13px] font-semibold text-[#f0f2f7] cursor-pointer"

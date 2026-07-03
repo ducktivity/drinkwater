@@ -2,48 +2,30 @@ name: Web Deploy
 
 # Builds the SolidJS web app and deploys to Cloudflare Pages via Wrangler.
 #
-# Release-gated, mirroring cd-desktop.yml so web and desktop publish together off
-# the same backend-verified commit whenever a release is cut:
-#   - Triggered by workflow_run AFTER Backend CD succeeds on main, so the SPA
-#     always deploys a commit that passed a verified API build.
-#   - The `decide` job reads the version from web-desktop/package.json. If that
-#     version has no git tag yet, this commit cuts a new release and we deploy;
-#     if the version is already tagged, every job is skipped and the run finishes
-#     green (Cloudflare keeps serving the last deployment).
-#   - Bump the version with `pnpm run release <version>`, commit, and merge to
-#     publish web + desktop together.
+# Release-gated and fired on push to main — the SAME event that starts Backend CD — so web goes live alongside the backend and desktop, not chained after the backend. It does NOT wait for Backend CD to finish; the backend cutover is a separate manual box reconcile anyway (see cd-backend.yml).
+#   - The `decide` job reads the version from web-desktop/package.json. If that version has no git tag yet, this commit cuts a new release and we deploy; if the version is already tagged, every job is skipped and the run finishes green (Cloudflare keeps serving the last deployment).
+#   - Bump the version with `pnpm run release <version>`, commit, and merge to publish web + desktop together.
 #   - PRs are validated by ci-web.yml before merge (branch protection).
 
 on:
-  workflow_run:
-    workflows: ['Backend CD']
-    types: [completed]
+  push:
     branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  # Deploy only when a new release is cut. Web Deploy fires for every green
-  # Backend CD run (i.e. every push to main), so we gate on the version in
-  # web-desktop/package.json: deploy only when that version has no tag yet, which
-  # is exactly the commit where the release is cut. This matches cd-desktop.yml's
-  # `decide` job so web and desktop ship the same version together. Gating on the
-  # version tag (rather than a path diff) also sidesteps the fact that a
-  # workflow_run event carries no before-SHA to diff a push range against.
+  # Deploy only when a new release is cut. Web Deploy fires on every push to main, so we gate on the version in web-desktop/package.json: deploy only when that version has no tag yet, which is exactly the commit where the release is cut. This matches cd-desktop.yml's `decide` job so web and desktop ship the same version together.
   decide:
     name: Decide whether to deploy
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
     outputs:
       release: ${{ steps.d.outputs.release }}
     steps:
       - uses: actions/checkout@v4
         with:
           # Full history + tags so the version-tag existence check is reliable.
-          # Pin to the exact commit Backend CD verified.
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Decide whether this commit cuts a new release
         id: d
         run: |
@@ -73,9 +55,6 @@ jobs:
         working-directory: web-desktop
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Checkout the exact commit Backend CD verified.
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -98,7 +77,7 @@ jobs:
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          apiToken: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: web-desktop
           command: pages deploy dist --project-name=drinkwater-web --branch=main

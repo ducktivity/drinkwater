@@ -26,7 +26,7 @@ import (
 // @Failure      401  {object}  map[string]string "Missing or invalid token"
 // @Failure      404  {object}  map[string]string "No settings saved for this user yet"
 // @Failure      500  {object}  map[string]string "Internal server or database error"
-// @Router       /settings [get]
+// @Router       /v1/settings [get]
 func GetSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -40,8 +40,7 @@ func GetSettings(w http.ResponseWriter, r *http.Request) {
 	row, err := dbgen.New(database.DB).GetUserSettings(ctx, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// No settings yet: the client keeps its local fallbacks and the row is
-			// created lazily on the first save (PutSettings).
+			// No settings yet: the client keeps its local fallbacks and the row is created lazily on the first save (PutSettings).
 			clientError(w, r, http.StatusNotFound, "no settings for user", `{"error": "No settings saved"}`)
 			return
 		}
@@ -64,7 +63,7 @@ func GetSettings(w http.ResponseWriter, r *http.Request) {
 // @Failure      400     {object}  map[string]string "Invalid request body"
 // @Failure      401     {object}  map[string]string "Missing or invalid token"
 // @Failure      500     {object}  map[string]string "Internal server or database error"
-// @Router       /settings [put]
+// @Router       /v1/settings [put]
 func PutSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -81,8 +80,7 @@ func PutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	// The document is opaque, but it must be present and well-formed JSON so we
-	// never persist garbage into the jsonb column.
+	// The document is opaque, but it must be present and well-formed JSON so we never persist garbage into the jsonb column.
 	if len(input.Settings) == 0 || !json.Valid(input.Settings) {
 		clientError(w, r, http.StatusBadRequest, "missing or invalid settings document", `{"error": "A valid settings document is required"}`)
 		return

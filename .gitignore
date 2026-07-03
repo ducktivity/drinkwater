@@ -19,9 +19,10 @@ mobile/build/
 mobile/.flutter-plugins
 mobile/.flutter-plugins-dependencies
 
-# Secrets
+# Secrets — real secrets never live in git. Prod values stay in your local
+# .env.prod (shipped to the box by deploy/remote-deploy.sh); dev values in .env.
 .env
-deploy/ansible/.vault_pass
+.env.prod
 
 # Agents
 AGENTS.md

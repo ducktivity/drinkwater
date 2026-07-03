@@ -13,8 +13,7 @@ import (
 // DB holds our connection pool global instance
 var DB *pgxpool.Pool
 
-// Ping verifies the database is reachable. It backs the /readyz readiness probe,
-// so callers should pass a short-deadline context to keep the probe responsive.
+// Ping verifies the database is reachable. It backs the /readyz readiness probe, so callers should pass a short-deadline context to keep the probe responsive.
 func Ping(ctx context.Context) error {
 	if DB == nil {
 		return errors.New("database pool not initialized")
@@ -23,13 +22,11 @@ func Ping(ctx context.Context) error {
 }
 
 func Connect() {
-	// The deployment injects the connection string via this env var: in prod it is
-	// Neon's pooled URL from the box's .env; locally it falls back to the line below.
+	// The deployment injects the connection string via this env var: in prod it is Neon's pooled URL from the box's .env; locally it falls back to the line below.
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
-		// Default fallback for running a local Postgres container. These are
-		// throwaway localhost dev credentials, not a real secret.
-		connStr = "postgres://postgres:postgres@localhost:5432/drinkwater?sslmode=disable" // #nosec G101 -- local-dev fallback, no real credential
+		// Default fallback for running a local Postgres container. These are throwaway localhost dev credentials, not a real secret.
+		connStr = "postgres://postgres:postgres@localhost:5432/ducktivity?sslmode=disable&options=-c%20search_path%3Ddrinkwater" // #nosec G101 -- local-dev fallback, no real credential
 	}
 
 	config, err := pgxpool.ParseConfig(connStr)

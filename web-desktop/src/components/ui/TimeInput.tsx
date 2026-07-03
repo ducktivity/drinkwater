@@ -4,15 +4,13 @@ interface Props {
   /** Fired with the new "HH:mm" string. */
   onValueChange: (value: string) => void
   /**
-   * When true, fire on every change (`input`) rather than only on commit
-   * (`change`). Use for fields bound to local state in a modal.
+   * When true, fire on every change (`input`) rather than only on commit (`change`). Use for fields bound to local state in a modal.
    */
   eager?: boolean
 }
 
 /**
- * A styled "HH:mm" time picker matching the dark UI theme. `scheme-dark` keeps
- * the native clock popup and spinners dark to match the surrounding chrome.
+ * A styled "HH:mm" time picker matching the dark UI theme. `scheme-dark` keeps the native clock popup and spinners dark to match the surrounding chrome.
  */
 export function TimeInput(props: Props) {
   const handle = (e: { currentTarget: HTMLInputElement }) =>

@@ -26,7 +26,7 @@ pnpm tauri info        # diagnose the local toolchain
 `tauri dev` runs `pnpm dev` for you (`beforeDevCommand`); `tauri build` runs
 `pnpm build` and bundles `dist/` (`frontendDist`). The window points at the same
 backend as the web app via `VITE_API_BASE_URL` (defaults to
-`http://localhost:8080`).
+`http://localhost:8001`).
 
 ##### Clean up local build (Tauri)
 

@@ -11,9 +11,7 @@ const ACCENT: Record<Toast['type'], string> = {
 const COPIED_FEEDBACK_MS = 1500
 
 /**
- * The support code line for an error toast: the backend request id shown in muted
- * monospace plus a button that copies the full id to the clipboard. Lets a user
- * report a precise code that pinpoints the failing request in the logs.
+ * The support code line for an error toast: the backend request id shown in muted monospace plus a button that copies the full id to the clipboard. Lets a user report a precise code that pinpoints the failing request in the logs.
  */
 function ToastErrorCode(props: { code: string }) {
   const [copied, setCopied] = createSignal(false)
@@ -26,8 +24,7 @@ function ToastErrorCode(props: { code: string }) {
       clearTimeout(resetTimer)
       resetTimer = setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS)
     } catch {
-      // Clipboard access can be denied (e.g. insecure context); the code stays
-      // visible for the user to copy manually, so there's nothing to recover.
+      // Clipboard access can be denied (e.g. insecure context); the code stays visible for the user to copy manually, so there's nothing to recover.
     }
   }
 
@@ -50,9 +47,7 @@ function ToastErrorCode(props: { code: string }) {
 }
 
 /**
- * Renders the stack of active toasts in the bottom-right corner. Each toast
- * shows a status icon, the message, and a dismiss button; they auto-expire via
- * the toast context. Purely presentational — all state lives in ToastProvider.
+ * Renders the stack of active toasts in the bottom-right corner. Each toast shows a status icon, the message, and a dismiss button; they auto-expire via the toast context. Purely presentational — all state lives in ToastProvider.
  */
 export function ToastContainer() {
   const { toasts, dismissToast } = useToast()

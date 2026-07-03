@@ -13,25 +13,18 @@ interface Props {
 /**
  * Modal dialog asking the user to confirm removal of a logged hydration entry.
  *
- * A log that has never been pushed to the backend (`is_synced === 0`) is removed
- * permanently from IndexedDB — no other device has ever seen it, so there is
- * nothing to soft-delete and propagate. An already-synced log is soft-deleted:
- * flagged deleted and unsynced so the deletion syncs out to the backend (and from
- * there to other devices).
+ * A log that has never been pushed to the backend (`is_synced === 0`) is removed permanently from IndexedDB — no other device has ever seen it, so there is nothing to soft-delete and propagate. An already-synced log is soft-deleted: flagged deleted and unsynced so the deletion syncs out to the backend (and from there to other devices).
  */
 export function DeleteLogDialog(props: Props) {
   const overlay = useOverlay()
   const history = useHistory()
 
   /**
-   * Removes the log. Unsynced logs are hard-deleted from IndexedDB; synced logs
-   * are soft-deleted (flagged deleted + unsynced) and a background sync is kicked
-   * off to propagate the deletion to the backend.
+   * Removes the log. Unsynced logs are hard-deleted from IndexedDB; synced logs are soft-deleted (flagged deleted + unsynced) and a background sync is kicked off to propagate the deletion to the backend.
    */
   async function handleDeleteConfirm() {
     if (props.log.is_synced === 0) {
-      // Never reached the server, so it lives only in this IndexedDB. Delete it
-      // outright rather than keeping a soft-deleted tombstone nothing will sync.
+      // Never reached the server, so it lives only in this IndexedDB. Delete it outright rather than keeping a soft-deleted tombstone nothing will sync.
       await db.waterLogs.delete(props.log.id)
       // Drive the history view off a deleted copy so it drops from past-day lists.
       history.syncHistoryView({ ...props.log, is_deleted: true })
@@ -39,9 +32,7 @@ export function DeleteLogDialog(props: Props) {
       return
     }
 
-    // Upsert the full record (rather than update by id): a historical log fetched
-    // from the backend may not exist in IndexedDB yet, so we must write it in full
-    // — flagged deleted and unsynced — for the soft-delete to propagate on sync.
+    // Upsert the full record (rather than update by id): a historical log fetched from the backend may not exist in IndexedDB yet, so we must write it in full — flagged deleted and unsynced — for the soft-delete to propagate on sync.
     const deleted: LocalWaterLog = {
       ...props.log,
       is_deleted: true,

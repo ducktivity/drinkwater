@@ -2,10 +2,7 @@ import { formatMl } from '../../utils'
 import { useOverlay } from '../../context/OverlayContext'
 
 /**
- * Modal dialog that appears before committing a water log, either when the user
- * drags the bottle to empty or taps "Log drank". Asks the user to confirm the
- * amount before it is recorded. Pulls the pending amount and confirm/cancel
- * handlers straight from the overlay context.
+ * Modal dialog that appears before committing a water log, either when the user drags the bottle to empty or taps "Log drank". Asks the user to confirm the amount before it is recorded. Pulls the pending amount and confirm/cancel handlers straight from the overlay context.
  */
 export function ConfirmLogDialog() {
   const overlay = useOverlay()

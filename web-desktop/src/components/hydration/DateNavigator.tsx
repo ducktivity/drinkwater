@@ -3,10 +3,7 @@ import { getTodayKey, shiftDateKey, formatFullDay } from '../../utils'
 import { useHistory } from '../../context/HistoryContext'
 
 /**
- * Day picker for the hydration history view. Lets the user step back/forward a
- * day with the arrows or jump to any past date with the native date input.
- * Forward navigation is capped at today since future days have no logs. Reads
- * and drives the selected day through the history context.
+ * Day picker for the hydration history view. Lets the user step back/forward a day with the arrows or jump to any past date with the native date input. Forward navigation is capped at today since future days have no logs. Reads and drives the selected day through the history context.
  */
 export function DateNavigator() {
   const history = useHistory()

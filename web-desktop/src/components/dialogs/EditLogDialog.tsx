@@ -14,8 +14,7 @@ interface Props {
 }
 
 /**
- * Modal dialog for editing a hydration log entry's time-of-day and amount.
- * The entry's date is preserved; only the local time and millilitres change.
+ * Modal dialog for editing a hydration log entry's time-of-day and amount. The entry's date is preserved; only the local time and millilitres change.
  */
 export function EditLogDialog(props: Props) {
   const overlay = useOverlay()
@@ -26,8 +25,7 @@ export function EditLogDialog(props: Props) {
   )
 
   /**
-   * Persists edits to the log: updates the amount and timestamp, flags it as
-   * unsynced in IndexedDB, then kicks off a background sync to the backend.
+   * Persists edits to the log: updates the amount and timestamp, flags it as unsynced in IndexedDB, then kicks off a background sync to the backend.
    */
   async function handleSave() {
     const log = props.log
@@ -36,10 +34,7 @@ export function EditLogDialog(props: Props) {
       logged_at: withTimeOfDay(log.logged_at, timeValue()),
     }
 
-    // Nothing changed — close the dialog without touching the sync state.
-    // Timestamps are compared at local minute granularity (matching the time
-    // input's precision) so equivalent instants in different ISO formats
-    // (e.g. "...Z" vs "...+08:00") don't register as a spurious change.
+    // Nothing changed — close the dialog without touching the sync state. Timestamps are compared at local minute granularity (matching the time input's precision) so equivalent instants in different ISO formats (e.g. "...Z" vs "...+08:00") don't register as a spurious change.
     const isUnchanged =
       changes.amount_ml === log.amount_ml &&
       toTimeInputValue(changes.logged_at) === toTimeInputValue(log.logged_at)
@@ -48,9 +43,7 @@ export function EditLogDialog(props: Props) {
       return
     }
 
-    // Upsert the full record: a historical log fetched from the backend may not
-    // be present in IndexedDB, so writing it in full (rather than update-by-id)
-    // ensures the edit is persisted and queued for sync in both cases.
+    // Upsert the full record: a historical log fetched from the backend may not be present in IndexedDB, so writing it in full (rather than update-by-id) ensures the edit is persisted and queued for sync in both cases.
     const updated: LocalWaterLog = { ...log, ...changes, is_synced: 0 }
     await db.waterLogs.put(updated)
     history.syncHistoryView(updated)

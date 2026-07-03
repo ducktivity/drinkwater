@@ -1,6 +1,6 @@
 [package]
 name = "drinkwater"
-version = "0.2.3"
+version = "0.3.0"
 description = "Drinkwater desktop shell — hosts the shared SolidJS web build in a Tauri WebView2 window."
 authors = ["Ducktivity"]
 license = ""
@@ -24,11 +24,8 @@ log = "0.4"
 tauri = { version = "2.11.2", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 tauri-plugin-notification = "2"
-# Auto-update: checks the GitHub Release feed, downloads the signed installer,
-# and applies it. `process` provides the relaunch-after-update call.
+# Auto-update: checks the GitHub Release feed, downloads the signed installer, and applies it. `process` provides the relaunch-after-update call.
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
-# Run-on-startup: registers/removes the OS login entry (Windows registry Run key)
-# and lets the frontend toggle it. Launched with `--autostart` so we can start
-# hidden in the tray on login rather than popping the window in the user's face.
+# Run-on-startup: registers/removes the OS login entry (Windows registry Run key) and lets the frontend toggle it. Launched with `--autostart` so we can start hidden in the tray on login rather than popping the window in the user's face.
 tauri-plugin-autostart = "2"

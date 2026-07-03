@@ -10,11 +10,7 @@ import { useHydration } from '../../context/HydrationContext'
 import { useHistory } from '../../context/HistoryContext'
 
 /**
- * Prominent banner that tells the user where they stand against their timed
- * hydration schedule: a strong warning when a deadline has been missed, or the
- * next goal (how much more to drink, and by when) otherwise. Only meaningful on
- * the live day, so it renders nothing while viewing a past day. Pulls the
- * schedule, today's total, and the ticking clock from context.
+ * Prominent banner that tells the user where they stand against their timed hydration schedule: a strong warning when a deadline has been missed, or the next goal (how much more to drink, and by when) otherwise. Only meaningful on the live day, so it renders nothing while viewing a past day. Pulls the schedule, today's total, and the ticking clock from context.
  */
 export function ScheduleGoalBanner() {
   const settings = useSettings()
