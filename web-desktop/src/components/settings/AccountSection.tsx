@@ -1,13 +1,13 @@
-import { createSignal, Show } from 'solid-js'
+import { Show } from 'solid-js'
 import { useAuth } from '../../context/AuthContext'
-import { LoginDialog } from '../dialogs/LoginDialog'
+import { useOverlay } from '../../context/OverlayContext'
 
 /**
- * The account row in the settings area: a "Sign in to sync" entry when logged out, or the signed-in email with a sign-out action. Owns its own login-dialog visibility so the rest of the tree stays unaware of auth UI state.
+ * The account row in the settings area: a "Sign in to sync" entry when logged out, or the signed-in email with a sign-out action. Opens the shared sign-in dialog (rendered in AppDialogs) through the overlay context.
  */
 export function AccountSection() {
   const auth = useAuth()
-  const [isLoginOpen, setIsLoginOpen] = createSignal(false)
+  const overlay = useOverlay()
 
   return (
     <div class="w-full">
@@ -16,7 +16,7 @@ export function AccountSection() {
         fallback={
           <button
             class="w-full cursor-pointer rounded-[10px] border-0 bg-[#222535] py-2.75 text-sm font-semibold text-[#f0f2f7]"
-            onClick={() => setIsLoginOpen(true)}
+            onClick={overlay.openLogin}
           >
             Sign in to sync
           </button>
@@ -38,10 +38,6 @@ export function AccountSection() {
             </button>
           </div>
         )}
-      </Show>
-
-      <Show when={isLoginOpen()}>
-        <LoginDialog onClose={() => setIsLoginOpen(false)} />
       </Show>
     </div>
   )
