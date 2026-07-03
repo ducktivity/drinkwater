@@ -50,6 +50,8 @@ jobs:
     needs: [decide, check]
     runs-on: ubuntu-latest
     if: needs.decide.outputs.release == 'true'
+    # Cloudflare deploy credentials live in the `production` environment secrets; without this the CLOUDFLARE_* secrets resolve to empty strings and the deploy fails auth.
+    environment: production
     defaults:
       run:
         working-directory: web-desktop
