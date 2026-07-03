@@ -29,3 +29,8 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 # Run-on-startup: registers/removes the OS login entry (Windows registry Run key) and lets the frontend toggle it. Launched with `--autostart` so we can start hidden in the tray on login rather than popping the window in the user's face.
 tauri-plugin-autostart = "2"
+
+# Windows-only: reach into the underlying WebView2 (Edge/Chromium) via its COM API to trim its memory when the app is hidden in the tray. Versions match Tauri's own webview2-com/windows bindings so the interface types unify into one instance.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+windows = "0.61"

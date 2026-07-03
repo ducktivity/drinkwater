@@ -955,7 +955,7 @@ dependencies = [
 
 [[package]]
 name = "drinkwater"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "log",
  "serde",
@@ -967,6 +967,8 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-process",
  "tauri-plugin-updater",
+ "webview2-com",
+ "windows",
 ]
 
 [[package]]

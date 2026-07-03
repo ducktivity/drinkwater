@@ -4,8 +4,46 @@ use tauri::{
   Manager, WindowEvent,
 };
 
+/// Nudge WebView2's memory target down when the window is hidden in the tray and back up when it returns to the foreground. `Low` asks Chromium to release caches and unused heap; `Normal` restores the default. Windows-only (WebView2 is the only backend exposing this), and a no-op elsewhere. Crucially, unlike suspending the webview this leaves JS timers running, so the in-page hydration reminder (`setInterval` in reminder.ts) keeps firing while the app sits quietly in the tray.
+fn set_webview_memory_low(window: &tauri::WebviewWindow, low: bool) {
+  #[cfg(windows)]
+  {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+      ICoreWebView2_19, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW,
+      COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL,
+    };
+    use windows::core::Interface;
+
+    let _ = window.with_webview(move |webview| unsafe {
+      let controller = webview.controller();
+      if let Ok(core) = controller.CoreWebView2() {
+        // MemoryUsageTargetLevel lives on ICoreWebView2_19 (shipped with Edge 114). On an older runtime the cast fails and we simply skip the hint rather than error.
+        if let Ok(core) = core.cast::<ICoreWebView2_19>() {
+          let level = if low {
+            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
+          } else {
+            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
+          };
+          let _ = core.SetMemoryUsageTargetLevel(level);
+        }
+      }
+    });
+  }
+  #[cfg(not(windows))]
+  {
+    let _ = (window, low);
+  }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  // Trim WebView2's always-on memory before the webview is created. `--disable-gpu` drops the dedicated GPU process (software compositing is more than enough for this small, mostly-static UI) and `--renderer-process-limit=1` holds Chromium to a single renderer. WebView2 reads this env var when it launches its browser process. Windows-only.
+  #[cfg(windows)]
+  std::env::set_var(
+    "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+    "--disable-gpu --renderer-process-limit=1",
+  );
+
   tauri::Builder::default()
     .plugin(tauri_plugin_notification::init())
     // Auto-update plugins. `updater` exposes the JS check/download/install API; `process` exposes relaunch so the app can restart itself after applying.
@@ -29,6 +67,8 @@ pub fn run() {
       if std::env::args().any(|arg| arg == "--autostart") {
         if let Some(window) = app.get_webview_window("main") {
           let _ = window.hide();
+          // Launched straight into the tray — start in the low-memory target so a login-time app doesn't hold its full footprint while unseen.
+          set_webview_memory_low(&window, true);
         }
       }
 
@@ -66,12 +106,22 @@ pub fn run() {
 
       Ok(())
     })
-    .on_window_event(|window, event| {
-      // Intercept the window's close button: hide to the tray instead of quitting. The app stays alive in the background until "Exit" is selected from the tray menu.
-      if let WindowEvent::CloseRequested { api, .. } = event {
+    .on_window_event(|window, event| match event {
+      // Intercept the window's close button: hide to the tray instead of quitting. The app stays alive in the background until "Exit" is selected from the tray menu. While hidden, let WebView2 trim its memory.
+      WindowEvent::CloseRequested { api, .. } => {
         let _ = window.hide();
+        if let Some(webview) = window.get_webview_window(window.label()) {
+          set_webview_memory_low(&webview, true);
+        }
         api.prevent_close();
       }
+      // Back in the foreground — via the tray-click restore or the reminder popping the window forward — restore the normal memory target so the UI is immediately responsive.
+      WindowEvent::Focused(true) => {
+        if let Some(webview) = window.get_webview_window(window.label()) {
+          set_webview_memory_low(&webview, false);
+        }
+      }
+      _ => {}
     })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
