@@ -11,6 +11,9 @@ importers:
 
   .:
     dependencies:
+      '@ducktivity/identity-client':
+        specifier: ^0.1.0
+        version: 0.1.0
       '@tauri-apps/api':
         specifier: ^2.11.0
         version: 2.11.0
@@ -211,6 +214,9 @@ packages:
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
     engines: {node: '>=12'}
+
+  '@ducktivity/identity-client@0.1.0':
+    resolution: {integrity: sha512-FpZITahsK+zD9Nf/wMXREqvvh8iButSFDU9kFMNnvxlG+/26T3NhIV8n8KddKtZ/miYfCngpvE9GjQT2V4nY2A==}
 
   '@emnapi/core@1.10.0':
     resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
@@ -2082,6 +2088,10 @@ snapshots:
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
+
+  '@ducktivity/identity-client@0.1.0':
+    dependencies:
+      openapi-fetch: 0.17.0
 
   '@emnapi/core@1.10.0':
     dependencies:

@@ -332,7 +332,7 @@
     "components": {
         "securitySchemes": {
             "BearerAuth": {
-                "description": "Type \"Bearer\" followed by a space and the session token issued by the identity service (id.ducktvt.com, POST /v1/auth/verify).",
+                "description": "Type \"Bearer\" followed by a space and the session token issued by the identity service (id.ducktvt.com, POST /v1/auth/verify-code).",
                 "type": "apiKey",
                 "name": "Authorization",
                 "in": "header"
