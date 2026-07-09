@@ -17,7 +17,7 @@ export interface AuthUser {
  * Asks the identity service to email a 6-digit login code to `email`, creating the account if it is new. Returns an error message on failure (e.g. rate-limited or invalid email), or null on success.
  */
 export async function requestCode(email: string): Promise<string | null> {
-  const { error } = await identityClient.POST('/v1/auth/request', {
+  const { error } = await identityClient.POST('/v1/auth/request-code', {
     body: { email },
   })
   return error
@@ -32,7 +32,7 @@ export async function verifyCode(
   email: string,
   code: string,
 ): Promise<{ user: AuthUser } | { error: string }> {
-  const { data, error } = await identityClient.POST('/v1/auth/verify', {
+  const { data, error } = await identityClient.POST('/v1/auth/verify-code', {
     body: { email, code },
   })
   if (error || !data) {

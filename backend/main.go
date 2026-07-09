@@ -80,7 +80,7 @@ func getenv(key, fallback string) string {
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization
-// @description Type "Bearer" followed by a space and the session token issued by the identity service (id.ducktvt.com, POST /v1/auth/verify).
+// @description Type "Bearer" followed by a space and the session token issued by the identity service (id.ducktvt.com, POST /v1/auth/verify-code).
 func main() {
 	resolveBuildInfo()
 

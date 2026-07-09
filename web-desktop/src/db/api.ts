@@ -42,7 +42,7 @@ apiClient.use({
     return request
   },
   onResponse({ request, response }) {
-    // A 401 on a request we authenticated means the token is expired or revoked: clear it and signal the auth context to drop to a logged-out state. We only react when a token was actually sent, so a 401 from /auth/verify (a wrong code, no token attached) does not trigger a spurious logout.
+    // A 401 on a request we authenticated means the token is expired or revoked: clear it and signal the auth context to drop to a logged-out state. We only react when a token was actually sent, so a 401 from /auth/verify-code (a wrong code, no token attached) does not trigger a spurious logout.
     if (response.status === 401 && request.headers.has('Authorization')) {
       clearToken()
       window.dispatchEvent(new Event(AUTH_LOGOUT_EVENT))
