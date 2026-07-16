@@ -2,7 +2,6 @@ name: Web Deploy
 
 # Builds the SolidJS web app and deploys to Cloudflare Pages via Wrangler.
 #
-# Release-gated and fired on push to main — the SAME event that starts Backend CD — so web goes live alongside the backend and desktop, not chained after the backend. It does NOT wait for Backend CD to finish; the backend cutover is a separate manual box reconcile anyway (see cd-backend.yml).
 #   - The `decide` job reads the version from web-desktop/package.json. If that version has no git tag yet, this commit cuts a new release and we deploy; if the version is already tagged, every job is skipped and the run finishes green (Cloudflare keeps serving the last deployment).
 #   - Bump the version with `pnpm run release <version>`, commit, and merge to publish web + desktop together.
 #   - PRs are validated by ci-web.yml before merge (branch protection).
