@@ -4,6 +4,8 @@ name: Backend CD
 #
 # Deploy is push-based: the `deploy` job SSHes to the box over Cloudflare Access using a short-lived certificate minted from a service token (no standing SSH key, no public port 22) and runs deploy/deploy.sh <sha>, which checks out that commit, sops-decrypts .env, brings the stack up at the matching sha-<gitsha>, and gates on /readyz — rolling back on the box if it fails. Because that runs synchronously here, a failed deploy turns THIS job red and notifies you through the normal Actions failure path; there is no separate deploy-health alert. Expand-only migrations keep the old container valid against the new schema during the brief cutover.
 #
+# A change under deploy/ (deploy.sh, ssh-forced-command.sh, compose, …) also triggers the `deploy` job on its own, so those scripts take effect against the existing `latest` image without a backend code change; the check/migrate/image jobs are skipped in that case.
+#
 
 
 on:
@@ -21,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
+      deploy: ${{ steps.filter.outputs.deploy }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -28,10 +31,13 @@ jobs:
         with:
           # 'every' = a file must match ALL patterns to count. Without it paths-filter ORs the list, so the '!backend/scripts/**' exclusion is ignored (any backend/** file, and even non-backend files, satisfy the negation) and the filter fires on every push.
           predicate-quantifier: 'every'
+          # 'deploy' has a single positive pattern, so 'every'/'some' is moot for it; it just changes what runs the deploy job (deploy/ script changes need a re-deploy even when the image is untouched).
           filters: |
             backend:
               - 'backend/**'
               - '!backend/scripts/**'
+            deploy:
+              - 'deploy/**'
 
   # Verification gate, extracted into a reusable workflow so the exact same gates also guard the tagged Desktop Release (see _backend-check.yml). The image is published only after this passes. Skipped (run stays green) when the backend did not change.
   check:
@@ -119,7 +125,10 @@ jobs:
   deploy:
     name: Deploy to box (SSH over Cloudflare Access)
     needs: [changes, check, migrate, image]
-    if: needs.changes.outputs.backend == 'true'
+    # Deploy when the backend changed (after its image is published) OR when only deploy/ changed (deploy.sh / ssh-forced-command.sh etc.), which needs a re-deploy against the existing `latest` image. In the deploy-only case check/migrate/image are skipped, so guard with !cancelled() && !failure() instead of relying on their success — a plain `needs`-success gate would skip this job whenever any upstream job is skipped.
+    if: >-
+      !cancelled() && !failure() &&
+      (needs.changes.outputs.backend == 'true' || needs.changes.outputs.deploy == 'true')
     runs-on: ubuntu-latest
     environment: production
     permissions:
