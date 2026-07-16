@@ -24,13 +24,8 @@ services:
       # Token verification. Drinkwater verifies (does not sign) tokens minted by the central identity service, fetching its public keys from JWKS_URL. AUTH_ISSUER must match the tokens' "iss" claim. No signing secret or email key lives here.
       JWKS_URL: ${JWKS_URL:-http://localhost:8000/.well-known/jwks.json}
       AUTH_ISSUER: ${AUTH_ISSUER:-http://localhost:8000}
-    # Publish only to the box's loopback: handy for on-box `curl`/debugging, never reachable from outside (defense-in-depth on top of the closed firewall). The shared edge cloudflared reaches the app over the ducktivity_edge network via the drinkwater-backend alias, not through this mapping. §6: no public inbound. For pure local dev you can change this to "8001:8001".
-    ports:
-      - "127.0.0.1:8001:8001"
-    # Resolve external names (NeonDB, JWKS host) via public resolvers instead of inheriting the host's systemd-resolved stub (127.0.0.53). The stub is unreachable from the container netns whenever systemd-resolved is down, which takes out all DB/JWKS lookups; pinning upstreams here makes the app's DNS independent of host resolver state. Docker still resolves internal aliases via its embedded 127.0.0.11 and forwards only external queries to these.
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
+    # External name resolution (NeonDB, JWKS host) is made reliable box-wide via /etc/docker/daemon.json (dns: 1.1.1.1, 8.8.8.8) — see deploy/README.md "Prerequisites (the box)". That replaces the host's flaky systemd-resolved stub (127.0.0.53) for every container, so no per-service dns: override is needed here. Docker still resolves internal aliases via its embedded 127.0.0.11.
+    # No host port is published: the app is reached only over the ducktivity_edge network via the drinkwater-backend alias (shared edge cloudflared routes drinkwater.ducktvt.com -> drinkwater-backend:8001), and deploy.sh probes /readyz from a throwaway curl container on that same network. §6: no public inbound. For pure local dev, add `ports: ["8001:8001"]`.
     # Attach to the suite's shared edge network so the shared cloudflared (edge stack) can route drinkwater.ducktvt.com -> drinkwater-backend:8001. Unique alias per app.
     networks:
       ducktivity_edge:

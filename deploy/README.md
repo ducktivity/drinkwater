@@ -18,6 +18,19 @@ For `remote-deploy.sh` also:
 
 ### Prerequisites (the box)
 
+- Docker daemon DNS. The container resolves NeonDB/JWKS hostnames via whatever upstream it inherits; the host's systemd-resolved stub (`127.0.0.53`) is unreachable from the container netns whenever resolved blinks, which kills all DB/JWKS lookups (`connection refused`). Pin reliable public resolvers box-wide so no container depends on the host stub:
+
+```sh
+sudo tee /etc/docker/daemon.json >/dev/null <<'EOF'
+{
+  "dns": ["1.1.1.1", "8.8.8.8"]
+}
+EOF
+sudo systemctl restart docker
+```
+
+This replaces the compose-level `dns:` override for every container (Docker still resolves internal aliases via its embedded `127.0.0.11`).
+
 - `sops`, `age` installed
 - Box age key:
 
