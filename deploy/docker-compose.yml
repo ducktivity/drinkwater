@@ -27,6 +27,10 @@ services:
     # Publish only to the box's loopback: handy for on-box `curl`/debugging, never reachable from outside (defense-in-depth on top of the closed firewall). The shared edge cloudflared reaches the app over the ducktivity_edge network via the drinkwater-backend alias, not through this mapping. §6: no public inbound. For pure local dev you can change this to "8001:8001".
     ports:
       - "127.0.0.1:8001:8001"
+    # Resolve external names (NeonDB, JWKS host) via public resolvers instead of inheriting the host's systemd-resolved stub (127.0.0.53). The stub is unreachable from the container netns whenever systemd-resolved is down, which takes out all DB/JWKS lookups; pinning upstreams here makes the app's DNS independent of host resolver state. Docker still resolves internal aliases via its embedded 127.0.0.11 and forwards only external queries to these.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     # Attach to the suite's shared edge network so the shared cloudflared (edge stack) can route drinkwater.ducktvt.com -> drinkwater-backend:8001. Unique alias per app.
     networks:
       ducktivity_edge:
