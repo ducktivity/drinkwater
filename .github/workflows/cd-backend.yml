@@ -1,10 +1,10 @@
 name: Backend CD
 
-# On push to main (when backend/ changed): re-verify the commit, run the expand-only goose migration from the runner straight at Neon, then — only if it succeeds — build and push the image to GHCR (immutable sha-<gitsha> + moving latest), then PUSH the deploy onto the box.
+# On push to main that touches backend/ or deploy/: re-verify the commit, run the expand-only goose migration from the runner straight at Neon, then — only if it succeeds — build and push the image to GHCR (immutable sha-<gitsha> + moving latest), then PUSH the deploy onto the box.
 #
 # Deploy is push-based: the `deploy` job SSHes to the box over Cloudflare Access using a short-lived certificate minted from a service token (no standing SSH key, no public port 22) and runs deploy/deploy.sh <sha>, which checks out that commit, sops-decrypts .env, brings the stack up at the matching sha-<gitsha>, and gates on /readyz — rolling back on the box if it fails. Because that runs synchronously here, a failed deploy turns THIS job red and notifies you through the normal Actions failure path; there is no separate deploy-health alert. Expand-only migrations keep the old container valid against the new schema during the brief cutover.
 #
-# A change under deploy/ (deploy.sh, ssh-forced-command.sh, compose, …) also triggers the `deploy` job on its own, so those scripts take effect against the existing `latest` image without a backend code change; the check/migrate/image jobs are skipped in that case.
+# A deploy/-only change (deploy.sh, ssh-forced-command.sh, compose, …) runs the SAME full pipeline rather than a standalone deploy, so the commit gets its own sha-<gitsha> image (backend layers are cached, so the rebuild is near-instant) — deploy.sh pins that exact sha, so skipping the image job would leave it with no tag to pull. A push touching neither backend/ nor deploy/ skips every job below and stays green.
 #
 
 
@@ -24,18 +24,17 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       deploy: ${{ steps.filter.outputs.deploy }}
+      # Run the full pipeline (check -> migrate -> image -> deploy) when EITHER backend/ or deploy/ changed. A deploy/-only change must still build an image: deploy.sh pins sha-<gitsha> of the deployed commit, and that tag would not exist if we skipped the image job.
+      run: ${{ steps.filter.outputs.backend == 'true' || steps.filter.outputs.deploy == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
         with:
-          # 'every' = a file must match ALL patterns to count. Without it paths-filter ORs the list, so the '!backend/scripts/**' exclusion is ignored (any backend/** file, and even non-backend files, satisfy the negation) and the filter fires on every push.
-          predicate-quantifier: 'every'
-          # 'deploy' has a single positive pattern, so 'every'/'some' is moot for it; it just changes what runs the deploy job (deploy/ script changes need a re-deploy even when the image is untouched).
+          # Any change under backend/ or deploy/ triggers a release. Both are single positive globs, so paths-filter ORs the file list — no predicate-quantifier needed. backend/scripts/ is intentionally NOT excluded: editing those also cuts a new image, trading a few cheap (backend-cached) rebuilds for a dead-simple filter.
           filters: |
             backend:
               - 'backend/**'
-              - '!backend/scripts/**'
             deploy:
               - 'deploy/**'
 
@@ -43,14 +42,14 @@ jobs:
   check:
     name: Verify backend before image release
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.run == 'true'
     uses: ./.github/workflows/_backend-check.yml
 
   # Migrations run here, against Neon, BEFORE the image is published. Expand-only, so the schema and the old container stay compatible during the ~2 min window before the box auto-reconciles. Uses the production environment for DATABASE_URL_MIGRATOR; restrict that environment to main in repo settings.
   migrate:
     name: Apply migrations (goose -> Neon)
     needs: [changes, check]
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -72,8 +71,8 @@ jobs:
   image:
     name: Build & push image to GHCR
     needs: [changes, check, migrate]
-    # Publish only after the gate passed AND the migration applied. When the backend is unchanged, `latest` already points at the correct image, so there is nothing to release.
-    if: needs.changes.outputs.backend == 'true'
+    # Publish only after the gate passed AND the migration applied. Runs for a deploy/-only change too (backend cached, near-instant rebuild) so that commit gets its own sha-<gitsha> tag for deploy.sh to pin — latest alone is not enough because deploy.sh pins the exact sha.
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -125,10 +124,8 @@ jobs:
   deploy:
     name: Deploy to box (SSH over Cloudflare Access)
     needs: [changes, check, migrate, image]
-    # Deploy when the backend changed (after its image is published) OR when only deploy/ changed (deploy.sh / ssh-forced-command.sh etc.), which needs a re-deploy against the existing `latest` image. In the deploy-only case check/migrate/image are skipped, so guard with !cancelled() && !failure() instead of relying on their success — a plain `needs`-success gate would skip this job whenever any upstream job is skipped.
-    if: >-
-      !cancelled() && !failure() &&
-      (needs.changes.outputs.backend == 'true' || needs.changes.outputs.deploy == 'true')
+    # Deploy after this commit's image is published. check/migrate/image now run for any backend/ or deploy/ change (changes.run), so a plain needs-success gate is correct — deploy runs only once all upstream jobs pass, and is skipped (with them) on a push that touches neither.
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     environment: production
     permissions:
