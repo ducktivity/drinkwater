@@ -1,10 +1,10 @@
 name: Backend CD
 
-# On push to main (when backend/ changed): re-verify the commit, run the expand-only goose migration from the runner straight at Neon, then — only if it succeeds — build and push the image to GHCR. That is where CI stops.
+# On push to main (when backend/ changed): re-verify the commit, run the expand-only goose migration from the runner straight at Neon, then — only if it succeeds — build and push the image to GHCR (immutable sha-<gitsha> + moving latest), then PUSH the deploy onto the box.
 #
-# CI holds NO SSH access to the box and never flips the live service. Going live is a deliberate manual step: the operator runs deploy/remote-deploy.sh from their machine, which copies the compose file + .env to the box and reconciles the stack over SSH (pull -> up -> /readyz -> auto-rollback). Expand-only migrations mean the still-running old container keeps working against the new schema until that manual cutover.
+# Deploy is push-based: the `deploy` job SSHes to the box over Cloudflare Access using a short-lived certificate minted from a service token (no standing SSH key, no public port 22) and runs deploy/deploy.sh <sha>, which checks out that commit, sops-decrypts .env, brings the stack up at the matching sha-<gitsha>, and gates on /readyz — rolling back on the box if it fails. Because that runs synchronously here, a failed deploy turns THIS job red and notifies you through the normal Actions failure path; there is no separate deploy-health alert. Expand-only migrations keep the old container valid against the new schema during the brief cutover.
 #
-# Web Deploy and Desktop Release fire on the same push to main and go live alongside the backend, not chained after it.
+
 
 on:
   push:
@@ -40,7 +40,7 @@ jobs:
     if: needs.changes.outputs.backend == 'true'
     uses: ./.github/workflows/_backend-check.yml
 
-  # Migrations run here, against Neon, BEFORE the image is published. Expand-only, so the schema and the old container stay compatible until the manual box reconcile. Uses the production environment for DATABASE_URL_MIGRATOR; restrict that environment to main in repo settings.
+  # Migrations run here, against Neon, BEFORE the image is published. Expand-only, so the schema and the old container stay compatible during the ~2 min window before the box auto-reconciles. Uses the production environment for DATABASE_URL_MIGRATOR; restrict that environment to main in repo settings.
   migrate:
     name: Apply migrations (goose -> Neon)
     needs: [changes, check]
@@ -114,3 +114,46 @@ jobs:
             BUILD_TIME=${{ steps.bm.outputs.build_time }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+
+  deploy:
+    name: Deploy to box (SSH over Cloudflare Access)
+    needs: [changes, check, migrate, image]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Install cloudflared
+        run: |
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o "$RUNNER_TEMP/cloudflared"
+          sudo install -m 0755 "$RUNNER_TEMP/cloudflared" /usr/local/bin/cloudflared
+          cloudflared --version
+
+      - name: Deploy over Access SSH
+        env:
+          # The service token authenticates the Access application in front of the SSH hostname; `cloudflared access ssh` (the ProxyCommand) reads these two env vars to open the tunnel. sshd auth is the SSH key below — separate factor.
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.TUNNEL_SERVICE_TOKEN_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.TUNNEL_SERVICE_TOKEN_SECRET }}
+          SSH_HOSTNAME: ${{ vars.DEPLOY_SSH_HOSTNAME }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # No pinned host key: each runner is ephemeral (fresh known_hosts every run), so any
+          # pin would be trust-on-first-use anyway. Connection integrity to the box is provided
+          # by Cloudflare Access — the tunnel is gated by the service token and the box has no
+          # public sshd — so accept-new here rather than carry a DEPLOY_SSH_KNOWN_HOSTS secret.
+          cat > ~/.ssh/config <<EOF
+          Host $SSH_HOSTNAME
+              HostName $SSH_HOSTNAME
+              User deploy
+              IdentityFile ~/.ssh/deploy_key
+              IdentitiesOnly yes
+              ProxyCommand /usr/local/bin/cloudflared access ssh --hostname %h
+              StrictHostKeyChecking accept-new
+          EOF
+          # The box's authorized_keys forces deploy/ssh-forced-command.sh, which reads this whole command from $SSH_ORIGINAL_COMMAND, parses out the 40-hex sha, and execs deploy.sh with it. Send the full path + sha so that wrapper's `.../deploy.sh <sha>` pattern matches.
+          ssh "$SSH_HOSTNAME" "/opt/ducktivity/drinkwater/deploy/deploy.sh ${{ github.sha }}"

@@ -19,10 +19,13 @@ mobile/build/
 mobile/.flutter-plugins
 mobile/.flutter-plugins-dependencies
 
-# Secrets — real secrets never live in git. Prod values stay in your local
-# .env.prod (shipped to the box by deploy/remote-deploy.sh); dev values in .env.
+# Secrets. Plaintext env never lives in git: .env.prod is your local source for the box secrets and .env is dev/the box's decrypted runtime file. The ENCRYPTED .env.sops IS committed (SOPS+age) — it is not matched by the patterns below.
 .env
 .env.prod
+
+# Box-local deploy state, written by deploy/deploy.sh inside the box's clone.
+.last_good_tag
+.env.tmp
 
 # Agents
 AGENTS.md

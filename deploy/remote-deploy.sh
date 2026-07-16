@@ -1,72 +1,30 @@
 #!/usr/bin/env bash
-# Runs on YOUR machine (Git Bash / WSL), NOT the box. One command to go live: copies the compose file and your local .env.prod (landed on the box as .env, which compose auto-loads) to the box over Cloudflare Access SSH, then reconciles the stack on the box (pull -> up -> /readyz -> auto-rollback) — the box-side steps are streamed inline over SSH, so there is no second script to maintain. No secrets live in git or GitHub; your secrets stay in drinkwater/.env.prod on your disk only.
+# Runs on YOUR machine (Git Bash / WSL), NOT the box. One command to deploy or explicitly roll back to a specific commit: opens the Cloudflare Access tunnel and triggers the box's deploy.sh for that git sha over SSH. This is the SAME path CI takes on a push to main — just invoked by hand — so it reuses deploy.sh's logic instead of duplicating it.
 #
-# Migrations are NOT run here; CI applies them (expand-only) when it builds the image, so the tag you deploy already has its schema live.
+# It carries NOTHING to the box. The box already holds the git clone and the committed, encrypted .env.sops; deploy.sh checks out the sha (so the compose file + secrets match the image), decrypts .env, pins the matching sha-<short> image, gates on /readyz, and rolls back ON THE BOX if it fails. deploy.sh streams that progress back over this SSH session.
 #
-# Prereqs on your machine: cloudflared installed + the Cloudflare Access service token sourced (TUNNEL_SERVICE_TOKEN_ID / TUNNEL_SERVICE_TOKEN_SECRET), and a filled drinkwater/.env.prod (copy from .env.example).
+# The deploy SSH key is command-restricted (ssh-forced-command.sh) to exactly `deploy.sh <sha>`, so this sends precisely that full-path command and nothing else — no scp, no extra commands (which the forced command would reject anyway).
 #
-# Usage:  ./deploy/remote-deploy.sh <image-tag>      e.g. sha-1a2b3c4  (or latest)
+# Migrations are NOT run here; CI applies them (expand-only) as it builds each image, so any sha you deploy already has its schema live. This is an IMAGE revert only — NEVER roll the schema back with a down migration.
+#
+# Prereqs on your machine: cloudflared installed + the Cloudflare Access service token sourced (TUNNEL_SERVICE_TOKEN_ID / TUNNEL_SERVICE_TOKEN_SECRET).
+#
+# Usage:  ./deploy/remote-deploy.sh <full-git-sha>   e.g. 1a2b3c4d...e   (40 hex; from the green cd-backend.yml run or `git rev-parse` of the commit you want live)
 set -euo pipefail
-cd "$(dirname "$0")/.."   # repo root (drinkwater/)
 
-TAG="${1:?usage: remote-deploy.sh <image-tag>   e.g. sha-1a2b3c4}"
+SHA="${1:?usage: remote-deploy.sh <full-git-sha>   (40-hex; deploy or roll back to that commit)}"
+# Fail fast locally with a clear message; the box's forced command validates the same 40-hex shape.
+[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "error: expected a full 40-hex git sha, got: '$SHA'" >&2; exit 2; }
 
 # Overridable config (sane suite defaults).
 SSH_HOST="${SSH_HOST:-ducktivity-ssh.ducktvt.com}"
 SSH_USER="${SSH_USER:-deploy}"
-APP_DIR="${APP_DIR:-/opt/ducktivity/drinkwater}"
-SECRETS="${SECRETS:-.env.prod}"   # local, git-ignored
-
-[ -f "$SECRETS" ] || { echo "error: $SECRETS not found — copy .env.example to .env.prod and fill it." >&2; exit 1; }
+# Absolute path so the box's forced-command wrapper's `.../deploy.sh <sha>` pattern matches.
+DEPLOY_SH="${DEPLOY_SH:-/opt/ducktivity/drinkwater/deploy/deploy.sh}"
 
 # SSH rides Cloudflare Access (no open port on the box). ProxyCommand needs cloudflared + a sourced service token; see the prereqs above.
 SSH_OPTS=(-o "ProxyCommand=cloudflared access ssh --hostname %h" -o StrictHostKeyChecking=accept-new)
-DEST="$SSH_USER@$SSH_HOST"
 
-echo "==> staging runtime files on $DEST:$APP_DIR"
-ssh "${SSH_OPTS[@]}" "$DEST" "mkdir -p '$APP_DIR'"
-scp "${SSH_OPTS[@]}" docker-compose.yml "$DEST:$APP_DIR/docker-compose.yml"
-scp "${SSH_OPTS[@]}" "$SECRETS"         "$DEST:$APP_DIR/.env"
-
-# Optional: authenticate the box to GHCR if the image package is private. Skip this by leaving GHCR_TOKEN unset and making the GHCR package public instead.
-if [ -n "${GHCR_TOKEN:-}" ]; then
-  echo "==> logging box in to GHCR"
-  ssh "${SSH_OPTS[@]}" "$DEST" "echo '$GHCR_TOKEN' | docker login ghcr.io -u '${GHCR_USER:-$SSH_USER}' --password-stdin"
-fi
-
-echo "==> reconciling to $TAG"
-# The reconcile runs ON THE BOX: pull the new image, swap the stack, wait for /readyz, and roll back to the last good tag if the new one never reports ready — so the deploy self-heals. The body is streamed over SSH (bash -s) with APP_DIR and the tag passed as positional args; the quoted heredoc keeps it literal so nothing expands locally. IMAGE_TAG in the shell env overrides docker-compose's default, so we never edit files to pin a tag. The app image is distroless (no curl), so /readyz is probed from a throwaway curl container on the shared edge network — drinkwater's backend listens on 8001.
-ssh "${SSH_OPTS[@]}" "$DEST" "bash -s -- '$APP_DIR' '$TAG'" <<'REMOTE'
-set -euo pipefail
-cd "$1"
-NEW_TAG="$2"
-chmod 600 .env
-PREV_TAG="$(cat .last_good_tag 2>/dev/null || echo latest)"
-
-deploy() {
-  IMAGE_TAG="$1" docker compose pull
-  IMAGE_TAG="$1" docker compose up -d --remove-orphans
-}
-
-ready() {
-  for _ in $(seq 1 10); do
-    if docker run --rm --network ducktivity_edge curlimages/curl:latest \
-        -fsS http://drinkwater-backend:8001/readyz >/dev/null 2>&1; then return 0; fi
-    sleep 3
-  done
-  return 1
-}
-
-echo "deploying $NEW_TAG (previous good: $PREV_TAG)"
-deploy "$NEW_TAG"
-docker image prune -f
-
-if ready; then
-  echo "$NEW_TAG" > .last_good_tag
-  echo "deploy ok: $NEW_TAG is live"
-else
-  echo "readyz failed; rolling back to $PREV_TAG" >&2
-  deploy "$PREV_TAG"
-  exit 1
-fi
-REMOTE
+echo "==> deploying git sha $SHA on $SSH_USER@$SSH_HOST"
+# Send the full path + sha. On the restricted key sshd runs ssh-forced-command.sh, which re-parses the sha from $SSH_ORIGINAL_COMMAND and execs deploy.sh with it; on an unrestricted key deploy.sh runs directly with the sha as $1. Either way the box converges on this exact commit.
+ssh "${SSH_OPTS[@]}" "$SSH_USER@$SSH_HOST" "$DEPLOY_SH $SHA"
