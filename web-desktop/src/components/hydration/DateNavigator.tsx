@@ -17,7 +17,7 @@ export function DateNavigator() {
   }
 
   return (
-    <div class="flex items-center justify-between gap-3">
+    <div class="flex items-center justify-between gap-3 w-full">
       <button
         type="button"
         aria-label="Previous day"
