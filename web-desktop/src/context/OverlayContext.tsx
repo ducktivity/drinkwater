@@ -40,6 +40,12 @@ interface OverlayContextValue {
   isReminderVisible: Accessor<boolean>
   /** Closes the reminder modal (both yes/no answers just dismiss it). */
   dismissReminder: () => void
+  /** Whether the sign-in dialog is open. */
+  isLoginOpen: Accessor<boolean>
+  /** Opens the sign-in dialog (from the sync button or the account settings row). */
+  openLogin: () => void
+  /** Closes the sign-in dialog. */
+  closeLogin: () => void
   /** Called when the user drags the bottle to empty — triggers the confirm dialog. */
   handleBottleEmptied: () => void
   /** Called when the user taps "Log drank" — confirms the amount drunk so far. */
@@ -75,6 +81,8 @@ export function OverlayProvider(props: ParentProps) {
   const [isAddingLog, setIsAddingLog] = createSignal(false)
   // Whether the drink-water reminder modal is showing. Raised by the reminder engine when the interval elapses, and cleared when the user answers.
   const [isReminderVisible, setIsReminderVisible] = createSignal(false)
+  // Whether the sign-in dialog is open. Shared here so both the navbar sync button and the account settings row open the same single dialog instance (rendered in AppDialogs).
+  const [isLoginOpen, setIsLoginOpen] = createSignal(false)
 
   // Wire up the gentle drink-water reminder. Each time the interval elapses the engine fires its native nudges (sound, taskbar flash, window pop) and we raise the in-app modal. Dismissing the modal does nothing more than close it — the next reminder simply arrives when the interval next elapses.
   createReminderEngine({
@@ -147,6 +155,9 @@ export function OverlayProvider(props: ParentProps) {
     setIsAddingLog,
     isReminderVisible,
     dismissReminder: () => setIsReminderVisible(false),
+    isLoginOpen,
+    openLogin: () => setIsLoginOpen(true),
+    closeLogin: () => setIsLoginOpen(false),
     handleBottleEmptied,
     handleLogDrank,
     handleLogConfirm,

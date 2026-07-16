@@ -1,15 +1,19 @@
 import { Show, createSignal, onCleanup } from 'solid-js'
 import { syncEngine } from '../../db/sync'
 import { useToast } from '../../context/ToastContext'
+import { useAuth } from '../../context/AuthContext'
+import { useOverlay } from '../../context/OverlayContext'
 
 /** How long the "synced" checkmark lingers before reverting to the refresh icon. */
 const SYNCED_FEEDBACK_MS = 1000
 
 /**
- * A manual sync control. Tapping it pushes the current bottle state to the backend: the refresh icon spins while syncing, then briefly becomes a green checkmark on success before returning to the idle refresh icon. Repeated taps are ignored while a sync is already in flight. Runs the sync itself and surfaces a toast on failure, distinguishing being offline from a real error.
+ * A manual sync control. Tapping it pushes the current bottle state to the backend: the refresh icon spins while syncing, then briefly becomes a green checkmark on success before returning to the idle refresh icon. Repeated taps are ignored while a sync is already in flight. Runs the sync itself and surfaces a toast on failure, distinguishing being offline from a real error. When the user isn't signed in — the state in which sync is a no-op — it opens the sign-in dialog instead, so the button always leads somewhere.
  */
 export function SyncButton() {
   const toast = useToast()
+  const auth = useAuth()
+  const overlay = useOverlay()
   const [status, setStatus] = createSignal<'idle' | 'syncing' | 'synced'>(
     'idle',
   )
@@ -19,6 +23,12 @@ export function SyncButton() {
 
   async function handleClick() {
     if (status() === 'syncing') return
+
+    // Syncing requires an account; without one syncEngine is a silent no-op. Prompt sign-in so the user understands why nothing synced and how to fix it. A successful sign-in kicks its own sync from the auth context.
+    if (!auth.isLoggedIn()) {
+      overlay.openLogin()
+      return
+    }
 
     setStatus('syncing')
     const result = await syncEngine()
