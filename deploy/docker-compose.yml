@@ -1,6 +1,9 @@
 # Minimal starter stack for local/early deployment.
 #
 # The full topology in docs/architecture.md §6/§7 (cloudflared outbound tunnel + app-blue/app-green colors + on-box deploy agent) layers on top of this. The single `app` service here stands in for a live color; Vector selects app containers by label, so it will pick up the blue/green pair unchanged once they exist. No Loki/Grafana/Alloy: log storage, search, and retention live in BetterStack, off-box.
+# Pin the Compose project name so it never drifts with the directory this file lives in
+# (container stays drinkwater-app-1 regardless of where compose runs from).
+name: drinkwater
 services:
   app:
     # On the box we PULL this prebuilt image (CI publishes it to GHCR). For local dev you can instead build from ../backend via the build: block below; `docker compose build` tags the result with this same name. IMAGE_TAG lets you pin a specific sha-<gitsha> (e.g. for rollback); it defaults to the moving `latest`.
