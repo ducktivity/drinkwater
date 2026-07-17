@@ -1,7 +1,6 @@
 import { db } from './db'
 import { apiClient, getRequestId } from './api'
 import { getToken } from './token'
-import { cleanupSyncedStaleLogs } from './cleanup'
 import { logger } from '../logger'
 
 /**
@@ -74,12 +73,6 @@ export const syncEngine = async (): Promise<SyncResult> => {
       localStorage.setItem('last_sync_time', data.server_time)
     }
     logger.log(`✅ Sync complete! Server time: ${data.server_time}`)
-
-    // 6. Now that local logs are confirmed on the server, drop stale (non-today) synced entries so IndexedDB doesn't accumulate data the UI never renders.
-    const removed = await cleanupSyncedStaleLogs()
-    if (removed > 0) {
-      logger.log(`🧹 Cleaned up ${removed} stale synced log(s).`)
-    }
 
     return { ok: true }
   } catch (err) {

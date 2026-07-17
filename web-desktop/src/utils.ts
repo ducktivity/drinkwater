@@ -105,6 +105,12 @@ export function formatMl(milliliters: number) {
     : milliliters + ' ml'
 }
 
+/** Formats a byte count for display — as megabytes when ≥ 1 MB (e.g. "1.4 MB"), as kilobytes otherwise (e.g. "48 KB"), rounding sub-kilobyte values up to "1 KB" so a non-empty amount never reads as "0 KB". */
+export function formatBytes(bytes: number) {
+  if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+  return Math.max(1, Math.round(bytes / 1024)) + ' KB'
+}
+
 /** Constrains a value to the inclusive range [min, max]. */
 export function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))

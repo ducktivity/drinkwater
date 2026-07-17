@@ -72,9 +72,9 @@ export function HistoryProvider(props: ParentProps) {
   /**
    * Loads a past day's logs whenever the user navigates to one. Today needs no load — its logs come live from IndexedDB.
    *
-   * Two phases so recent/offline days appear instantly:
-   *   1. Paint whatever is already in IndexedDB (local retention window plus any unsynced edits) immediately, on every navigation — no network, so spam-clicking prev/next stays responsive even while offline.
-   *   2. Reconcile against the backend (authoritative for pruned/other-device logs), debounced so only the day the user settles on is fetched.
+   * Two phases so days appear instantly:
+   *   1. Paint whatever is already in IndexedDB (all logs persist locally, plus any unsynced edits) immediately, on every navigation — no network, so spam-clicking prev/next stays responsive even while offline.
+   *   2. Reconcile against the backend (authoritative for other-device edits), debounced so only the day the user settles on is fetched.
    *
    * The selected date is re-checked in each step (isStale) so a slow load can't clobber a newer selection.
    *
@@ -91,7 +91,7 @@ export function HistoryProvider(props: ParentProps) {
     const isStale = () => selectedDate() !== date
     setIsLoadingHistory(true)
 
-    // Phase 1 — instant, un-debounced paint from IndexedDB so logs within the retention window (and unsynced changes) render immediately, even while offline.
+    // Phase 1 — instant, un-debounced paint from IndexedDB so the day's persisted logs (and unsynced changes) render immediately, even while offline.
     const localLogsPromise = readLocalLogsForDate(date)
     void localLogsPromise.then((localLogs) => {
       if (isStale()) return

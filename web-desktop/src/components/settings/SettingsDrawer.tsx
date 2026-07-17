@@ -2,6 +2,7 @@ import { createEffect, onCleanup, Show, type JSX } from 'solid-js'
 import { useOverlay } from '../../context/OverlayContext'
 import { isAutostartSupported } from '../../autostart'
 import { AccountSection } from './AccountSection'
+import { StorageSection } from './StorageSection'
 import { GoalSettingsSection } from './GoalSettingsSection'
 import { ScheduleSettings } from './ScheduleSettings'
 import { ReminderSettings } from './ReminderSettings'
@@ -95,6 +96,10 @@ export function SettingsDrawer() {
         <div class="flex flex-1 flex-col gap-7 overflow-y-auto px-5 py-6">
           <Section title="Account">
             <AccountSection />
+          </Section>
+
+          <Section title="Storage">
+            <StorageSection />
           </Section>
 
           <Section title="Preferences">
