@@ -15,7 +15,7 @@ function localDayRange(dateKey: string): { from: string; to: string } {
 /**
  * Reads the locally-stored (IndexedDB) water logs for a single local day.
  *
- * Fast and fully offline-safe: it never touches the network, so days still inside the local retention window — and any unsynced edits/additions for older days — render instantly. Returns the day's non-deleted logs sorted most-recent-first. The backend reconciliation in {@link fetchLogsForDate} fills in days that have already been pruned from IndexedDB.
+ * Fast and fully offline-safe: it never touches the network, so any past day renders instantly from the persisted local store. Returns the day's non-deleted logs sorted most-recent-first. The backend reconciliation in {@link fetchLogsForDate} refreshes the day with edits made on other devices.
  */
 export async function readLocalLogsForDate(
   dateKey: string,
@@ -33,18 +33,22 @@ export async function readLocalLogsForDate(
 /**
  * Fetches the water logs for a single local day for display in the history view.
  *
- * Synced logs older than the local retention window are pruned from IndexedDB, so the backend is the source of truth for those past days. We still merge in any logs that live locally for that day — chiefly local edits/additions that haven't been pushed yet, plus recent days still inside the retention window — so unsynced changes remain visible even before the next sync completes. When an id exists both locally and remotely, the local copy wins (it may hold a pending edit). Throws if the backend request fails (e.g. offline); callers should fall back to the local view from {@link readLocalLogsForDate}.
+ * All logs persist locally, so this is a freshness check against the backend rather than a fetch of pruned data: it reconciles the local view with logs edited on other devices. We still merge in the day's local logs — chiefly local edits/additions that haven't been pushed yet — so unsynced changes remain visible even before the next sync completes. When an id exists both locally and remotely, the local copy wins (it may hold a pending edit). Throws if the backend request fails (e.g. offline); callers should fall back to the local view from {@link readLocalLogsForDate}.
+ *
+ * An optional AbortSignal cancels the in-flight request when a newer day is selected, so superseded fetches are dropped rather than run to completion.
  *
  * Returns the day's non-deleted logs sorted most-recent-first.
  */
 export async function fetchLogsForDate(
   dateKey: string,
+  signal?: AbortSignal,
 ): Promise<LocalWaterLog[]> {
   const { from, to } = localDayRange(dateKey)
 
-  // Remote logs for the day (already-synced source of truth).
+  // Remote logs for the day (source of truth for other-device edits).
   const { data, error, response } = await apiClient.GET('/v1/logs', {
     params: { query: { from, to } },
+    signal,
   })
   if (error)
     throw new RequestError(

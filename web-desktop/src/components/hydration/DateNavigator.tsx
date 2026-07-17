@@ -16,6 +16,12 @@ export function DateNavigator() {
     history.setSelectedDate(next)
   }
 
+  /** Jumps directly to the date picked in the native input, never past today. */
+  function pickDate(value: string) {
+    if (!value || value > getTodayKey()) return
+    history.setSelectedDate(value)
+  }
+
   return (
     <div class="flex items-center justify-between gap-3 w-full">
       <button
@@ -38,10 +44,23 @@ export function DateNavigator() {
         </svg>
       </button>
 
+      {/* The date label doubles as a jump-to-date control: the native date input is visually hidden and the formatted label drives it, so clicking the text opens the OS picker via showPicker(). */}
       <div class="text-sm font-semibold text-[#f0f2f7]">
-        <Show when={!isToday()} fallback="Today">
-          {formatFullDay(history.selectedDate())}
-        </Show>
+        <label for="nav-datepicker" class="cursor-pointer">
+          <Show when={!isToday()} fallback="Today">
+            {formatFullDay(history.selectedDate())}
+          </Show>
+        </label>
+        <input
+          id="nav-datepicker"
+          type="date"
+          aria-label="Jump to date"
+          class="sr-only"
+          max={getTodayKey()}
+          value={history.selectedDate()}
+          onClick={(event) => event.currentTarget.showPicker()}
+          onChange={(event) => pickDate(event.currentTarget.value)}
+        />
       </div>
 
       <button
