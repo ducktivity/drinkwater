@@ -19,14 +19,34 @@ export function LogList() {
   return (
     <div class="w-full max-w-105 mt-5">
       <div class="flex items-center justify-between mb-2.5 px-0.5">
-        <div class="text-[13px] font-semibold text-[#7a7f96] uppercase tracking-[0.5px]">
-          {title()}
+        <div class="flex items-center gap-2">
+          <div class="text-[13px] font-semibold text-[#7a7f96] uppercase tracking-[0.5px]">
+            {title()}
+          </div>
+          {/* Instant local logs are already on screen; this spinner marks the background refresh against the backend without blanking the list. */}
+          <Show when={history.isLoadingHistory()}>
+            <svg
+              class="animate-spin text-[#7a7f96]"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-label="Refreshing"
+            >
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+          </Show>
         </div>
         {/* Back-filling only applies to past days; today is logged via the bottle. */}
         <Show when={!history.isViewingToday()}>
           <button
             type="button"
-            class="flex items-center gap-1 text-[13px] font-semibold text-sky-400 cursor-pointer"
+            disabled={history.isLoadingHistory()}
+            class="flex items-center gap-1 text-[13px] font-semibold text-sky-400 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             onClick={() => overlay.setIsAddingLog(true)}
           >
             <svg
@@ -46,9 +66,17 @@ export function LogList() {
         </Show>
       </div>
 
-      <div class="flex flex-col gap-1.5">
+      {/* Only fully block on loading when there's nothing local to paint yet (e.g. a day fetched fresh from the backend). Otherwise the instant IndexedDB paint stays visible and just dims while the background refresh runs, its buttons disabled so stale entries can't be edited mid-refresh. */}
+      <div
+        class="flex flex-col gap-1.5 transition-opacity"
+        classList={{
+          'pointer-events-none opacity-60': history.isLoadingHistory(),
+        }}
+      >
         <Show
-          when={!history.isLoadingHistory()}
+          when={
+            !history.isLoadingHistory() || history.displayedLogs().length > 0
+          }
           fallback={
             <div class="text-[13px] text-[#7a7f96] py-2.5 px-4">Loading…</div>
           }
