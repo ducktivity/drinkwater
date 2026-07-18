@@ -49,7 +49,7 @@ ssh-keygen -t ed25519 -f ./deploy_ci_key -N '' -C 'drinkwater-ci-deploy'
 Add the **public** half to the box's `~/.ssh/authorized_keys`, forced to the deploy wrapper (paste `deploy_ci_key.pub` where shown):
 
 ```sh
-command="/opt/ducktivity/drinkwater/deploy/ssh-forced-command.sh",restrict ssh-ed25519 AAAA...deploy_ci_key.pub... drinkwater-ci-deploy
+command="/opt/ducktivity/drinkwater/deploy/ssh-forced-command.sh",restrict <public key here>
 ```
 
 Put the **private** `deploy_ci_key` in the GitHub `DEPLOY_SSH_KEY` secret (for CI) or keep it locally for `remote-deploy.sh`. Then delete `deploy_ci_key`/`deploy_ci_key.pub` once both halves are in place.
