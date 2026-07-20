@@ -11,7 +11,7 @@ SHA="${1:?usage: remote-deploy.sh <full-git-sha>   (40-hex; deploy or roll back 
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "error: expected a full 40-hex git sha, got: '$SHA'" >&2; exit 2; }
 
 # Overridable config (sane suite defaults).
-SSH_HOST="${SSH_HOST:-ducktivity-ssh.ducktvt.com}"
+SSH_HOST="${SSH_HOST:-ssh.ducktvt.com}"
 SSH_USER="${SSH_USER:-deploy}"
 APP_DIR="${APP_DIR:-/opt/ducktivity/drinkwater}"          # clone root; compose project root is $APP_DIR/deploy
 REPO_URL="${REPO_URL:-https://github.com/ducktivity/drinkwater.git}"   # first-run clone only
